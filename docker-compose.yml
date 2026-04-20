@@ -27,6 +27,7 @@ services:
       - "5001:5001"
     environment:
       - DOCLING_SERVE_ENABLE_UI=1
+      - DOCLING_SERVE_MAX_SYNC_WAIT=1800
     restart: unless-stopped
 
 volumes:

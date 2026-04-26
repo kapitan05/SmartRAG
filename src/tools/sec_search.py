@@ -15,11 +15,11 @@ def make_sec_search_tool(
     )
 
     @tool
-    def search_sec_reports(query: str) -> str:
+    async def search_sec_reports(query: str) -> str:
         """Используй этот инструмент для поиска финансовой информации и рисков в отчетах SEC 10-K."""
 
         # LangChain сам переведет query в вектор и сделает правильный поиск!
-        docs = vector_store.similarity_search(query, k=4)
+        docs = await vector_store.asimilarity_search(query, k=4)
 
         context_texts = []
         for doc in docs:

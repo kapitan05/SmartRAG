@@ -10,3 +10,6 @@ wheels/
 .venv
 
 .env
+
+# gold_truth data
+evaluation_data/

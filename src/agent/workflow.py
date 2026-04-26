@@ -8,39 +8,52 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
 from src.agent.state import AgentState, CriticFeedback
-from src.prompts.system import CRITIC_SYSTEM_PROMPT
+from src.prompts.system import AGENT_SYSTEM_PROMPT, CRITIC_SYSTEM_PROMPT
+from src.prompts.templates import CRITIC_EVALUATION_TEMPLATE
 
 
 class RAGWorkflow:
     def __init__(self, llm: BaseChatModel, tools: list[BaseTool]):
         self.llm = llm
         self.tools = tools
-        # Предварительно связываем LLM с тулзами и создаем LLM для критика
         self.llm_with_tools = self.llm.bind_tools(self.tools, parallel_tool_calls=False)
         self.critic_llm = self.llm.with_structured_output(CriticFeedback)
 
     def agent_node(self, state: AgentState) -> dict[str, Any]:
-        """Узел основного Агента."""
-        response = self.llm_with_tools.invoke(state["messages"])
+        """Main Agent node."""
+        messages = state["messages"]
+        system_message = SystemMessage(content=AGENT_SYSTEM_PROMPT)
+        messages_to_send = [system_message] + messages
+        response = self.llm_with_tools.invoke(messages_to_send)
+
         return {"messages": [response]}
 
     def critic_node(self, state: AgentState) -> dict[str, Any]:
-        """Узел Критика (Reflexion pattern)."""
+        """Critic node."""
         messages = state["messages"]
         draft_answer = str(messages[-1].content)
         revisions = state.get("revisions", 0)
 
         if revisions >= 2:
             return {"approved": True}
+        # user query extraction
+        user_queries = [
+            m.content
+            for m in messages
+            if isinstance(m, HumanMessage) and "CRITIC_FEEDBACK:" not in str(m.content)
+        ]
+        original_question = user_queries[-1] if user_queries else "Unknown Query"
 
         context_msgs = [m for m in messages if getattr(m, "type", "") == "tool"]
         context = (
-            "\n".join(str(m.content) for m in context_msgs)
+            "\n\n".join(str(m.content) for m in context_msgs)
             if context_msgs
-            else "Поиск в базе не производился."
+            else "No external context was retrieved."
         )
 
-        user_prompt = f"КОНТЕКСТ:\n{context}\n\nОТВЕТ АГЕНТА:\n{draft_answer}"
+        user_prompt = CRITIC_EVALUATION_TEMPLATE.format(
+            question=original_question, context=context, draft_answer=draft_answer
+        )
 
         raw_feedback = self.critic_llm.invoke(
             [
@@ -54,9 +67,12 @@ class RAGWorkflow:
             return {"approved": True, "revisions": revisions + 1}
 
         feedback_msg = HumanMessage(
-            content=f"КРИТИК ОТКЛОНИЛ ОТВЕТ. Ошибки: {feedback.issues}. "
-            f"Перепиши ответ, используя строго предоставленный контекст."
+            content=f"CRITIC_FEEDBACK: Your previous answer was rejected.\n"
+            f"Identified Issues: {feedback.issues}\n"
+            f"Action Required: Rewrite the answer to directly address the user's question, "
+            f"strictly using ONLY the provided context. Do not hallucinate."
         )
+
         return {
             "messages": [feedback_msg],
             "approved": False,

@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -8,6 +9,7 @@ from langgraph.graph.state import CompiledStateGraph
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 from qdrant_client import QdrantClient
 
+from src.agent.builder import build_rag_graph
 from src.agent.workflow import RAGWorkflow
 from src.api.dependencies import get_chat_history_collection, get_graph
 from src.api.schemas import ChatRequest, ChatResponse
@@ -15,34 +17,18 @@ from src.core.config import settings
 from src.prompts.system import AGENT_SYSTEM_PROMPT
 from src.tools.sec_search import make_sec_search_tool
 
+load_dotenv()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # 1. Инициализация ресурсов
-    qdrant_client = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
+
     mongo_client: AsyncIOMotorClient[Any] = AsyncIOMotorClient(settings.mongo_uri)
-    embeddings = OpenAIEmbeddings(
-        model="text-embedding-3-small",
-        api_key=settings.openai_api_key,
-    )
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        temperature=0.0,
-        api_key=settings.openai_api_key,
-    )
-
-    # 2. Сборка графа
-    sec_search_tool = make_sec_search_tool(qdrant_client, embeddings)
-    workflow = RAGWorkflow(llm=llm, tools=[sec_search_tool])
-    compiled_graph = workflow.compile()
-
-    # 3. Сохранение в app.state (Никаких глобальных переменных!)
     app.state.mongo_client = mongo_client
-    app.state.graph = compiled_graph
 
+    app.state.graph = build_rag_graph()
     yield
 
-    # 4. Очистка ресурсов
     mongo_client.close()
 
 
@@ -82,3 +68,25 @@ async def chat_endpoint(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/chat/context/{user_id}")
+async def clear_context(
+    user_id: str,
+    collection: AsyncIOMotorCollection[Any] = Depends(get_chat_history_collection),
+) -> dict[str, Any]:
+    """Удаляет всю историю диалога для конкретного пользователя."""
+    result = await collection.delete_many({"user_id": user_id})
+    return {"status": "success", "deleted_count": result.deleted_count}
+
+
+@app.get("/api/chat/history/{user_id}")
+async def get_history(
+    user_id: str,
+    limit: int = 5,
+    collection: AsyncIOMotorCollection[Any] = Depends(get_chat_history_collection),
+) -> list[dict[str, str]]:
+    """Возвращает последние сообщения для отображения при загрузке UI."""
+    cursor = collection.find({"user_id": user_id}).sort("_id", 1)
+    docs = await cursor.to_list(length=limit)
+    return [{"query": d["query"], "answer": d["answer"]} for d in docs]

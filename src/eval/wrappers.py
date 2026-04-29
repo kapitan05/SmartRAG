@@ -10,33 +10,41 @@ eval_graph = build_rag_graph()
 
 async def rag_eval_wrapper(inputs: dict[str, Any]) -> dict[str, Any]:
     """
-    Обертка над LangGraph для системы эвалюации LangSmith.
-    Принимает вопрос, прогоняет через агента и возвращает ответ + контекст.
+    Wrapper for running the RAG evaluation graph.
+    This function will be called by LangSmith's evaluation framework.
+    It takes a question as input, runs the RAG graph,
+    and extracts both the final answer and the retrieved documents for evaluation.
     """
     question: str = inputs["question"]
 
-    # Уникальный ID для каждого тестового прогона, чтобы изолировать контекст
+    # unique thread_id for LangSmith
     thread_id = "eval_run_thread"
     config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
-    # Формируем состояние для LangGraph
+    # graph state with initial question
     initial_state = {
         "user_id": "evaluator_bot",
         "query": question,
         "messages": [HumanMessage(content=question)],
     }
 
-    # Выполняем граф
     result_state = await eval_graph.ainvoke(initial_state, config=config)
 
-    # ИЗВЛЕКАЕМ ДАННЫЕ ДЛЯ DEEPEVAL
-    # Убедись, что твой граф сохраняет найденные документы (например, в result_state["documents"])
-    retrieved_docs = result_state.get("documents", [])
+    messages = result_state.get("messages", [])
+
+    retrieved_texts = []
+    for msg in messages:
+        if getattr(msg, "type", "") == "tool":
+            retrieved_texts.append(str(msg.content))
+
+    if "answer" in result_state:
+        final_answer = result_state["answer"]
+    elif messages:
+        final_answer = messages[-1].content
+    else:
+        final_answer = "Error: Could not extract answer from state."
 
     return {
-        "answer": result_state["messages"][-1].content
-        if "messages" in result_state
-        else "No answer found",
-        # DeepEval требует массив строк для параметра retrieval_context
-        "retrieved_docs": [doc.page_content for doc in retrieved_docs],
+        "answer": final_answer,
+        "retrieved_docs": retrieved_texts,
     }

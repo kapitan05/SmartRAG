@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -39,6 +37,9 @@ services:
     depends_on:
       - qdrant
       - mongodb
+    volumes:
+      - ./src:/app/src
+      - ./sec-10K-filings:/app/sec-10K-filings
 
   ui:
     build: .                

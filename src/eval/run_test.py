@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import logging
 from typing import Any
@@ -24,7 +25,7 @@ async def run_ab_experiment(
     config_overrides: dict[str, Any],
 ) -> None:
     """
-    Запускает полное тестирование RAG системы на датасете из LangSmith.
+    Runs an evaluation for RAG  using LangSmith's evaluation framework.
 
     Args:
         dataset_name: Имя датасета в LangSmith (напр. "RAG_Gold_Benchmark_v1").
@@ -50,7 +51,7 @@ async def run_ab_experiment(
         ],
         experiment_prefix=experiment_prefix,
         metadata=config_overrides,
-        max_concurrency=4,
+        max_concurrency=2,
     )
 
     logger.info(
@@ -61,11 +62,23 @@ async def run_ab_experiment(
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    # Пример: мы тестируем новую версию с температурой 0.2
+    parser = argparse.ArgumentParser(
+        description="Run RAG evaluation experiment with specified dataset and configuration."
+    )
+    parser.add_argument(
+        "--prefix",
+        type=str,
+        required=True,
+        help="Prefix for the experiment name (e.g. 'v2_large_chunking'). "
+        "This helps identify the experiment in LangSmith.",
+    )
+
+    args = parser.parse_args()
+
     asyncio.run(
         run_ab_experiment(
             dataset_name="RAG_Gold_Benchmark_v1",
-            experiment_prefix="RAG_v2_Temp_0.2",
+            experiment_prefix=args.prefix,
             config_overrides={"temperature": 0.2, "retriever_k": 5},
         )
     )

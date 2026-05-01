@@ -64,7 +64,7 @@ class RAGWorkflow:
         feedback = cast(CriticFeedback, raw_feedback)
 
         if feedback.approved:
-            return {"approved": True, "revisions": revisions + 1}
+            return {"approved": True, "revisions": revisions}
 
         feedback_msg = HumanMessage(
             content=f"CRITIC_FEEDBACK: Your previous answer was rejected.\n"

@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import re
-from typing import Any, cast
+from typing import Any
 
 import httpx
 from dotenv import load_dotenv
@@ -212,9 +212,12 @@ def run_ingestion() -> None:
 
             section_path = " > ".join([h for h in [h1, h2] if h])
 
-            context_header = f"[COMPANY: {doc_meta['ticker']} | PERIOD: {doc_meta['year']} {doc_meta['quarter']}]"
+            context_header = f"{doc_meta['ticker']} Financial Report, {doc_meta['year']} {doc_meta['quarter']}."
             if section_path:
-                context_header += f"\n[SECTION: {section_path}]"
+                context_header += f"\nSection: {section_path}"
+
+            # 2. Append text (Header at top)
+            chunk.page_content = f"{context_header}\n\n{chunk.page_content}"
 
             # (OPTIONAL) Enable this if you want the LLM summary.
             # WARNING: For a full 10-Q, this will make ~200 API calls per document.
@@ -222,9 +225,6 @@ def run_ingestion() -> None:
             # document_context = f"{doc_meta['ticker']} 10-Q filing for {doc_meta['year']} {doc_meta['quarter']}."
             # summary = summarize_chunk(chunk.page_content, document_context, llm)
             # context_header += f"\n[SUMMARY: {summary}]"
-
-            # Prepend context directly into the text so the embedding model encodes it
-            chunk.page_content = f"{context_header}\n\n{chunk.page_content}"
 
             # Ensure metadata is cleanly attached to Qdrant payload
             chunk.metadata.update(

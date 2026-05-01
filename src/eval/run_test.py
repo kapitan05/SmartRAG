@@ -10,9 +10,14 @@ from langsmith.schemas import Example
 from src.eval.graders import (
     eval_answer_relevancy,
     eval_contextual_recall,
-    eval_exact_match,
     eval_faithfulness,
-    eval_policy_compliance,
+    evaluate_precision_at_1,
+    evaluate_precision_at_3,
+    evaluate_precision_at_10,
+    evaluate_recall_at_1,
+    evaluate_recall_at_3,
+    evaluate_recall_at_10,
+    evaluate_word_f1,
 )
 from src.eval.wrappers import rag_eval_wrapper
 
@@ -43,11 +48,16 @@ async def run_ab_experiment(
         rag_eval_wrapper,
         data=eval_data,
         evaluators=[
-            eval_exact_match,
-            eval_policy_compliance,
             eval_contextual_recall,
             eval_faithfulness,
             eval_answer_relevancy,
+            evaluate_word_f1,
+            evaluate_precision_at_1,
+            evaluate_precision_at_3,
+            evaluate_precision_at_10,
+            evaluate_recall_at_1,
+            evaluate_recall_at_3,
+            evaluate_recall_at_10,
         ],
         experiment_prefix=experiment_prefix,
         metadata=config_overrides,

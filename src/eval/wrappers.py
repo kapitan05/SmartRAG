@@ -1,3 +1,4 @@
+import uuid
 from typing import Any
 
 from langchain_core.messages import HumanMessage
@@ -18,7 +19,7 @@ async def rag_eval_wrapper(inputs: dict[str, Any]) -> dict[str, Any]:
     question: str = inputs["question"]
 
     # unique thread_id for LangSmith
-    thread_id = "eval_run_thread"
+    thread_id = str(uuid.uuid4())
     config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
     # graph state with initial question

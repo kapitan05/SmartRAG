@@ -1,101 +1,118 @@
 import re
 from typing import Any
 
-from deepeval.metrics import (
-    AnswerRelevancyMetric,
-    ContextualRecallMetric,
-    FaithfulnessMetric,
-)
 from deepeval.test_case import LLMTestCase
 from langsmith.schemas import Example, Run
 
-
-def eval_exact_match(run: Run, example: Example) -> dict[str, Any]:
-    """
-    Проверяет, содержит ли финальный ответ точную ключевую фразу
-    из expected_answer. Игнорирует регистр.
-    """
-    # Защита типов (Mypy)
-    if not example.outputs or not run.outputs:
-        return {"key": "exact_match", "score": 0, "comment": "Missing outputs."}
-
-    expected: str = example.outputs.get("expected_answer", "")
-    prediction: str = run.outputs.get("answer", "")
-
-    if not expected:
-        return {
-            "key": "exact_match",
-            "score": 1,
-            "comment": "No expected answer provided.",
-        }
-
-    # Логика: если ожидаемый ответ (или его ключевая часть) есть в генерации
-    score = 1.0 if expected.lower() in prediction.lower() else 0.0
-
-    return {
-        "key": "exact_match",
-        "score": score,
-        "comment": "Found expected string"
-        if score
-        else f"Missing expected string: {expected[:50]}...",
-    }
-
-
-def eval_policy_compliance(run: Run, example: Example) -> dict[str, Any]:
-    """
-    Проверяет соблюдение политик компании (Policy check).
-    Например: Агент не должен давать финансовых рекомендаций
-    (содержать слово "invest" / "buy stock").
-    """
-    if not run.outputs:
-        return {
-            "key": "policy_compliance",
-            "score": 0,
-            "comment": "Missing run outputs.",
-        }
-
-    prediction: str = run.outputs.get("answer", "").lower()
-
-    # Список запрещенных паттернов (можно вынести в конфиг)
-    forbidden_patterns = [r"\bbuy\s+stock\b", r"\binvest\s+in\b", r"financial\s+advice"]
-
-    for pattern in forbidden_patterns:
-        if re.search(pattern, prediction):
-            return {
-                "key": "policy_compliance",
-                "score": 0.0,
-                "comment": f"Violation: Found forbidden phrase matching '{pattern}'.",
-            }
-
-    return {
-        "key": "policy_compliance",
-        "score": 1.0,
-        "comment": "Compliant: No forbidden phrases found.",
-    }
-
-
-recall_metric = ContextualRecallMetric(
-    threshold=0.7, model="gpt-4o-mini", include_reason=True
-)
-faith_metric = FaithfulnessMetric(
-    threshold=0.7, model="gpt-4o-mini", include_reason=True
-)
-relevancy_metric = AnswerRelevancyMetric(
-    threshold=0.7, model="gpt-4o-mini", include_reason=True
+from src.eval.custom_metrics import (
+    PrecisionAtKMetric,
+    RecallAtKMetric,
+    WordF1Metric,
+    custom_business_metric,
+    faith_metric,
+    recall_metric,
+    relevancy_metric,
 )
 
 
+def extract_expected_sources(answer_text: str) -> list[str]:
+    """Extracts expected sources from the end of the answer."""
+    match = re.search(r"SOURCE\(S\):\s*(.+)", answer_text, flags=re.IGNORECASE)
+    if match:
+        sources_str = match.group(1)
+        return [s.strip() for s in sources_str.split(",")]
+    return []
+
+
+# wrapper for custom metrics with better type safety and error handling
 def _build_test_case(run: Run, example: Example) -> LLMTestCase | None:
     """Вспомогательная функция для сборки объекта LLMTestCase c защитой типов."""
     if not run.outputs or not example.outputs or not example.inputs:
         return None
 
+    expected_answer = str(example.outputs.get("expected_answer", ""))
+
+    expected_docs = example.outputs.get("expected_context", [])
+    if not expected_docs:
+        expected_docs = extract_expected_sources(expected_answer)
+
     return LLMTestCase(
         input=example.inputs.get("question", ""),
         actual_output=run.outputs.get("answer", ""),
-        expected_output=example.outputs.get("expected_answer", ""),
+        expected_output=expected_answer,
         retrieval_context=run.outputs.get("retrieved_docs", []),
+        context=expected_docs,
     )
+
+
+# ==========================================
+#  PRECISION METRICS
+# ==========================================
+
+
+def evaluate_precision_at_1(run: Run, example: Example) -> dict[str, Any]:
+    test_case = _build_test_case(run, example)
+    if not test_case:
+        return {"key": "Precision@1", "score": 0.0}
+
+    metric = PrecisionAtKMetric(k=1, threshold=0.0)
+    metric.measure(test_case)
+    return {"key": "Precision@1", "score": metric.score}
+
+
+def evaluate_precision_at_3(run: Run, example: Example) -> dict[str, Any]:
+    test_case = _build_test_case(run, example)
+    if not test_case:
+        return {"key": "Precision@3", "score": 0.0}
+
+    metric = PrecisionAtKMetric(k=3, threshold=0.0)
+    metric.measure(test_case)
+    return {"key": "Precision@3", "score": metric.score}
+
+
+def evaluate_precision_at_10(run: Run, example: Example) -> dict[str, Any]:
+    test_case = _build_test_case(run, example)
+    if not test_case:
+        return {"key": "Precision@10", "score": 0.0}
+
+    metric = PrecisionAtKMetric(k=10, threshold=0.0)
+    metric.measure(test_case)
+    return {"key": "Precision@10", "score": metric.score}
+
+
+# ==========================================
+# RECALL METRICS
+# ==========================================
+
+
+def evaluate_recall_at_1(run: Run, example: Example) -> dict[str, Any]:
+    test_case = _build_test_case(run, example)
+    if not test_case:
+        return {"key": "Recall@1", "score": 0.0}
+
+    metric = RecallAtKMetric(k=1, threshold=0.0)
+    metric.measure(test_case)
+    return {"key": "Recall@1", "score": metric.score, "comment": metric.reason}
+
+
+def evaluate_recall_at_3(run: Run, example: Example) -> dict[str, Any]:
+    test_case = _build_test_case(run, example)
+    if not test_case:
+        return {"key": "Recall@3", "score": 0.0}
+
+    metric = RecallAtKMetric(k=3, threshold=0.0)
+    metric.measure(test_case)
+    return {"key": "Recall@3", "score": metric.score, "comment": metric.reason}
+
+
+def evaluate_recall_at_10(run: Run, example: Example) -> dict[str, Any]:
+    test_case = _build_test_case(run, example)
+    if not test_case:
+        return {"key": "Recall@10", "score": 0.0}
+
+    metric = RecallAtKMetric(k=10, threshold=0.0)
+    metric.measure(test_case)
+    return {"key": "Recall@10", "score": metric.score, "comment": metric.reason}
 
 
 def eval_contextual_recall(run: Run, example: Example) -> dict[str, Any]:
@@ -110,6 +127,25 @@ def eval_contextual_recall(run: Run, example: Example) -> dict[str, Any]:
         "score": recall_metric.score,
         "comment": recall_metric.reason,
     }
+
+
+# ==========================================
+# GENERATION METRICS
+# ==========================================
+
+
+def evaluate_word_f1(run: Run, example: Example) -> dict[str, Any]:
+    test_case = _build_test_case(run, example)
+    if not test_case:
+        return {
+            "key": "Word F1",
+            "score": 0.0,
+            "comment": "Missing data in run/example",
+        }
+
+    metric = WordF1Metric(threshold=0.5)
+    metric.measure(test_case)
+    return {"key": "Word F1", "score": metric.score}
 
 
 def eval_faithfulness(run: Run, example: Example) -> dict[str, Any]:
@@ -137,4 +173,23 @@ def eval_answer_relevancy(run: Run, example: Example) -> dict[str, Any]:
         "key": "Answer Relevancy",
         "score": relevancy_metric.score,
         "comment": relevancy_metric.reason,
+    }
+
+
+def eval_custom_business_logic(run: Run, example: Example) -> dict[str, Any]:
+    """LangSmith обертка для кастомной GEval метрики с Few-Shot примерами."""
+    if not run.outputs or not example.outputs or not example.inputs:
+        return {"key": "Business Accuracy", "score": 0, "comment": "Missing data"}
+
+    test_case = LLMTestCase(
+        input=example.inputs.get("question", ""),
+        actual_output=run.outputs.get("answer", ""),
+        expected_output=example.outputs.get("expected_answer", ""),
+    )
+
+    custom_business_metric.measure(test_case)
+    return {
+        "key": "Business Accuracy",
+        "score": custom_business_metric.score,
+        "comment": custom_business_metric.reason,
     }

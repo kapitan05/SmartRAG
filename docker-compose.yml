@@ -40,6 +40,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./sec-10K-filings:/app/sec-10K-filings
+      - ./evaluation_data:/app/evaluation_data
 
   ui:
     build: .                
@@ -53,6 +54,39 @@ services:
     depends_on:
       - api
 
+  mlflow:
+      image: ghcr.io/mlflow/mlflow:v2.12.1
+      container_name: mlflow_server
+      ports:
+        - "5050:5000"
+      command: >
+        mlflow server
+        --host 0.0.0.0
+        --port 5000
+        --backend-store-uri sqlite:///mlflow.db
+        --default-artifact-root ./artifacts
+      volumes:
+        - ./mlflow_data:/mlflow
+      working_dir: /mlflow
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
 volumes:
   qdrant_data:
   mongo_data:
+  mlflow_data:
+  prometheus_data:

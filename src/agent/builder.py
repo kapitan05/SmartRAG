@@ -2,6 +2,7 @@
 from typing import Any
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_qdrant import FastEmbedSparse
 from langgraph.graph.state import CompiledStateGraph
 from qdrant_client import QdrantClient  # Импортируй свой класс графа
 
@@ -21,11 +22,16 @@ def build_rag_graph() -> CompiledStateGraph[Any, Any, Any, Any]:
     embeddings = OpenAIEmbeddings(
         model="text-embedding-3-small", api_key=settings.openai_api_key
     )
+    sparse_embeddings = FastEmbedSparse(model_name="Qdrant/bm25")
     llm = ChatOpenAI(
         model="gpt-4o-mini", temperature=0.0, api_key=settings.openai_api_key
     )
 
-    sec_search_tool = make_sec_search_tool(qdrant_client, embeddings)
+    sec_search_tool = make_sec_search_tool(
+        qdrant_client,
+        embeddings,
+        sparse_embeddings=sparse_embeddings,
+    )
 
     # graph workflow
     workflow = RAGWorkflow(llm=llm, tools=[sec_search_tool])

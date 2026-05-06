@@ -3,28 +3,50 @@ from typing import Any
 from langchain_core.embeddings import Embeddings
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, tool
-from langchain_qdrant import QdrantVectorStore
+from langchain_qdrant import (
+    FastEmbedSparse,
+    QdrantVectorStore,
+    RetrievalMode,
+    sparse_embeddings,
+)
 from qdrant_client import QdrantClient
 
 
 def make_sec_search_tool(
-    qdrant_client: QdrantClient, embeddings: Embeddings
+    qdrant_client: QdrantClient,
+    embeddings: Embeddings,
+    sparse_embeddings: FastEmbedSparse,
 ) -> BaseTool:
 
-    vector_store = QdrantVectorStore(
-        client=qdrant_client, collection_name="sec_reports", embedding=embeddings
-    )
-
-    # ВАЖНО: Указываем, что инструмент возвращает и текст, и артефакт
     @tool(response_format="content_and_artifact")
     async def search_sec_reports(
         query: str,
-        config: RunnableConfig,  # <- LangChain сам передаст сюда конфиг!
+        config: RunnableConfig,
     ) -> tuple[str, list[Any]]:
         """Используй этот инструмент для поиска финансовой информации и рисков в отчетах SEC 10-K."""
 
-        # 1. Извлекаем наш динамический k (по умолчанию 4, если не передали)
         k = config.get("configurable", {}).get("retriever_k", 4)
+        search_algorithm = config.get("configurable", {}).get(
+            "search_algorithm", "hybrid"
+        )
+
+        if search_algorithm == "dense":
+            mode = RetrievalMode.DENSE
+        elif search_algorithm == "bm25":
+            mode = RetrievalMode.SPARSE
+        else:
+            mode = RetrievalMode.HYBRID
+
+        # 3. Инициализируем VectorStore прямо внутри вызова с нужным режимом.
+        # Это мгновенная (дешевая) операция, она не делает сетевых запросов при создании.
+        vector_store = QdrantVectorStore(
+            client=qdrant_client,
+            collection_name="sec_reports",  # Убедись, что имя совпадает с базой из ingestion!
+            embedding=embeddings,
+            sparse_embedding=sparse_embeddings,
+            sparse_vector_name="bm25",
+            retrieval_mode=mode,
+        )
 
         # 2. Ищем k документов
         docs = await vector_store.asimilarity_search(query, k=k)

@@ -8,12 +8,12 @@ import httpx
 from dotenv import load_dotenv
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_qdrant import QdrantVectorStore
+from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
 from langchain_text_splitters import (
     MarkdownHeaderTextSplitter,
     RecursiveCharacterTextSplitter,
 )
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient, models
 from qdrant_client.http.models import Distance, VectorParams
 
 load_dotenv()
@@ -150,14 +150,17 @@ def run_ingestion() -> None:
     qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
 
     client = QdrantClient(host=qdrant_host, port=qdrant_port)
+    client.set_sparse_model("Qdrant/bm25")
 
     if not client.collection_exists(COLLECTION_NAME):
         client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+            sparse_vectors_config={"bm25": models.SparseVectorParams()},
         )
     # llm_summarizer = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    sparse_embeddings = FastEmbedSparse(model_name="Qdrant/bm25")
 
     for file_name in os.listdir(DATA_DIR):
         if not file_name.endswith(".pdf"):
@@ -239,11 +242,14 @@ def run_ingestion() -> None:
         save_chunks_to_json(final_chunks, json_file_path)
 
         logger.info(
-            f"Generating embeddings and uploading {len(final_chunks)} chunks to Qdrant"
+            f"Generating Dense & BM25 embeddings and uploading {len(final_chunks)} chunks to Qdrant"
         )
         QdrantVectorStore.from_documents(
             final_chunks,
             embeddings,
+            sparse_embedding=sparse_embeddings,
+            sparse_vector_name="bm25",
+            retrieval_mode=RetrievalMode.HYBRID,
             url=f"http://{qdrant_host}:{qdrant_port}",
             collection_name=COLLECTION_NAME,
             force_recreate=False,

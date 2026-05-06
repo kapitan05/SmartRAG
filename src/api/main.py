@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langgraph.graph.state import CompiledStateGraph
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
+from prometheus_fastapi_instrumentator import Instrumentator
 from qdrant_client import QdrantClient
 
 from src.agent.builder import build_rag_graph
@@ -90,3 +91,7 @@ async def get_history(
     cursor = collection.find({"user_id": user_id}).sort("_id", 1)
     docs = await cursor.to_list(length=limit)
     return [{"query": d["query"], "answer": d["answer"]} for d in docs]
+
+
+# metrics collection
+Instrumentator().instrument(app).expose(app)

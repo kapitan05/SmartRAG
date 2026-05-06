@@ -10,23 +10,51 @@ from deepeval.metrics import (
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
 
+def extract_sources(text: str) -> set[str]:
+    """
+    Searches for [SOURCE: filename.pdf] tags in the text
+    and returns a list of unique filenames.
+    """
+    matches = re.findall(r"\[SOURCE:\s*(.+?)\]", text)
+    # Приводим к нижнему регистру и удаляем пробелы для надежности
+    return set(m.strip().lower() for m in matches)
+
+
 class WordF1Metric(BaseMetric):  # type: ignore
     def __init__(self, threshold: float = 0.5) -> None:
         super().__init__()
         self.threshold: float = threshold
-        self.score: float = 0.0
-        self.success: bool = False
-        self.reason: str | None = None
+        # Add basic stop words to ignore
+        self.stop_words = {
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "of",
+            "in",
+            "to",
+            "and",
+        }
 
     def measure(self, test_case: LLMTestCase) -> float:
         if not test_case.expected_output or not test_case.actual_output:
-            self.score = 0.0
-            self.success = False
-            self.reason = "Missing expected_output or actual_output."
+            self.score, self.success = 0.0, False
             return self.score
 
-        expected_words = set(re.findall(r"\w+", test_case.expected_output.lower()))
-        actual_words = set(re.findall(r"\w+", test_case.actual_output.lower()))
+        # Extract words, lowercased, ignoring stop words
+        expected_words = set(
+            w
+            for w in re.findall(r"\w+", test_case.expected_output.lower())
+            if w not in self.stop_words
+        )
+        actual_words = set(
+            w
+            for w in re.findall(r"\w+", test_case.actual_output.lower())
+            if w not in self.stop_words
+        )
 
         common_words = expected_words.intersection(actual_words)
 
@@ -35,15 +63,14 @@ class WordF1Metric(BaseMetric):  # type: ignore
         else:
             precision = len(common_words) / len(actual_words)
             recall = len(common_words) / len(expected_words)
-
-            if precision + recall == 0:
-                self.score = 0.0
-            else:
-                self.score = 2 * (precision * recall) / (precision + recall)
+            self.score = (
+                0.0
+                if precision + recall == 0
+                else 2 * (precision * recall) / (precision + recall)
+            )
 
         self.success = self.score >= self.threshold
-        self.reason = f"Word F1 Score is {self.score:.2f}."
-
+        self.reason = f"Word F1 Score is {self.score:.2f} (excluding stop words)."
         return self.score
 
     async def a_measure(self, test_case: LLMTestCase) -> float:
@@ -57,35 +84,54 @@ class WordF1Metric(BaseMetric):  # type: ignore
         return "Word F1"
 
 
-class PrecisionAtKMetric(BaseMetric):  # type: ignore
-    def __init__(self, k: int, threshold: float = 0.5) -> None:
+class DocumentPrecisionMetric(BaseMetric):  # type: ignore
+    def __init__(self, threshold: float = 0.5) -> None:
         super().__init__()
-        self.k: int = k
         self.threshold: float = threshold
         self.score: float = 0.0
         self.success: bool = False
         self.reason: str | None = None
 
     def measure(self, test_case: LLMTestCase) -> float:
-        retrieved_k: list[str] = (
-            test_case.retrieval_context[: self.k] if test_case.retrieval_context else []
+        # Берем ВЕСЬ контекст, без среза по K
+        retrieved_calls: list[str] = (
+            test_case.retrieval_context if test_case.retrieval_context else []
         )
         expected: list[str] = test_case.context if test_case.context else []
 
-        if not expected or not retrieved_k:
+        if not expected or not retrieved_calls:
             self.score = 0.0
             self.reason = "Missing retrieval_context or expected_context."
             self.success = False
             return self.score
 
-        hits = 0
+        # 1. Собираем ожидаемые файлы
+        expected_sources = set()
         for exp in expected:
-            if any(exp.lower() in ret.lower() for ret in retrieved_k):
-                hits += 1
+            extracted = extract_sources(exp)
+            if extracted:
+                expected_sources.update(extracted)
+            else:
+                expected_sources.add(exp.strip().lower())
 
-        self.score = hits / self.k
+        # 2. Собираем ВСЕ уникальные файлы, которые Агент нашел за все вызовы
+        retrieved_sources = set()
+        for ret in retrieved_calls:
+            retrieved_sources.update(extract_sources(ret))
+
+        if not retrieved_sources:
+            self.score = 0.0
+            self.success = False
+            self.reason = "No sources could be extracted from retrieval_context."
+            return self.score
+
+        # 3. Считаем пересечение
+        hits = len(expected_sources.intersection(retrieved_sources))
+
+        # Precision: Какая доля из найденных Агентом документов была правильной?
+        self.score = hits / len(retrieved_sources)
         self.success = self.score >= self.threshold
-        self.reason = f"Found {hits} expected contexts in Top-{self.k} retrieved docs."
+        self.reason = f"Out of {len(retrieved_sources)} unique docs retrieved by Agent, {hits} were correct."
 
         return self.score
 
@@ -97,21 +143,21 @@ class PrecisionAtKMetric(BaseMetric):  # type: ignore
 
     @property
     def __name__(self) -> str:
-        return f"Precision@{self.k}"
+        return "Doc_Precision"
 
 
-class RecallAtKMetric(BaseMetric):  # type: ignore
-    def __init__(self, k: int, threshold: float = 0.5) -> None:
+class DocumentRecallMetric(BaseMetric):  # type: ignore
+    def __init__(self, threshold: float = 0.5) -> None:
         super().__init__()
-        self.k: int = k
         self.threshold: float = threshold
         self.score: float = 0.0
         self.success: bool = False
         self.reason: str | None = None
 
     def measure(self, test_case: LLMTestCase) -> float:
-        retrieved_k: list[str] = (
-            test_case.retrieval_context[: self.k] if test_case.retrieval_context else []
+        # Берем ВЕСЬ контекст, без среза по K
+        retrieved_calls: list[str] = (
+            test_case.retrieval_context if test_case.retrieval_context else []
         )
         expected: list[str] = test_case.context if test_case.context else []
 
@@ -121,22 +167,33 @@ class RecallAtKMetric(BaseMetric):  # type: ignore
             self.success = False
             return self.score
 
-        if not retrieved_k:
+        if not retrieved_calls:
             self.score = 0.0
-            self.reason = "Qdrant returned nothing."
+            self.reason = "Agent returned nothing."
             self.success = False
             return self.score
 
-        hits = 0
+        # 1. Собираем ожидаемые файлы
+        expected_sources = set()
         for exp in expected:
-            if any(exp.lower() in ret.lower() for ret in retrieved_k):
-                hits += 1
+            extracted = extract_sources(exp)
+            if extracted:
+                expected_sources.update(extracted)
+            else:
+                expected_sources.add(exp.strip().lower())
 
-        self.score = hits / len(expected)
+        # 2. Собираем ВСЕ уникальные файлы, которые Агент нашел за все вызовы
+        retrieved_sources = set()
+        for ret in retrieved_calls:
+            retrieved_sources.update(extract_sources(ret))
+
+        # 3. Считаем пересечение
+        hits = len(expected_sources.intersection(retrieved_sources))
+
+        # Recall: Какую долю из ожидаемых документов Агент смог найти?
+        self.score = hits / len(expected_sources) if expected_sources else 0.0
         self.success = self.score >= self.threshold
-        self.reason = (
-            f"Found {hits} out of {len(expected)} expected docs in Top-{self.k}."
-        )
+        self.reason = f"Found {hits} out of {len(expected_sources)} expected docs across all Agent retrievals."
 
         return self.score
 
@@ -148,7 +205,7 @@ class RecallAtKMetric(BaseMetric):  # type: ignore
 
     @property
     def __name__(self) -> str:
-        return f"Recall@{self.k}"
+        return "Doc_Recall"
 
 
 recall_metric = ContextualRecallMetric(

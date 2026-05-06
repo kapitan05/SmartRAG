@@ -5,8 +5,8 @@ from deepeval.test_case import LLMTestCase
 from langsmith.schemas import Example, Run
 
 from src.eval.custom_metrics import (
-    PrecisionAtKMetric,
-    RecallAtKMetric,
+    DocumentPrecisionMetric,
+    DocumentRecallMetric,
     WordF1Metric,
     custom_business_metric,
     faith_metric,
@@ -50,34 +50,16 @@ def _build_test_case(run: Run, example: Example) -> LLMTestCase | None:
 # ==========================================
 
 
-def evaluate_precision_at_1(run: Run, example: Example) -> dict[str, Any]:
+def evaluate_document_precision(run: Run, example: Example) -> dict[str, Any]:
+    """Считает, какая доля найденных Агентом документов была правильной."""
     test_case = _build_test_case(run, example)
     if not test_case:
-        return {"key": "Precision@1", "score": 0.0}
+        return {"key": "Doc_Precision", "score": 0.0}
 
-    metric = PrecisionAtKMetric(k=1, threshold=0.0)
+    # Используем наш новый класс без параметра K
+    metric = DocumentPrecisionMetric(threshold=0.0)
     metric.measure(test_case)
-    return {"key": "Precision@1", "score": metric.score}
-
-
-def evaluate_precision_at_3(run: Run, example: Example) -> dict[str, Any]:
-    test_case = _build_test_case(run, example)
-    if not test_case:
-        return {"key": "Precision@3", "score": 0.0}
-
-    metric = PrecisionAtKMetric(k=3, threshold=0.0)
-    metric.measure(test_case)
-    return {"key": "Precision@3", "score": metric.score}
-
-
-def evaluate_precision_at_10(run: Run, example: Example) -> dict[str, Any]:
-    test_case = _build_test_case(run, example)
-    if not test_case:
-        return {"key": "Precision@10", "score": 0.0}
-
-    metric = PrecisionAtKMetric(k=10, threshold=0.0)
-    metric.measure(test_case)
-    return {"key": "Precision@10", "score": metric.score}
+    return {"key": "Doc_Precision", "score": metric.score, "comment": metric.reason}
 
 
 # ==========================================
@@ -85,34 +67,16 @@ def evaluate_precision_at_10(run: Run, example: Example) -> dict[str, Any]:
 # ==========================================
 
 
-def evaluate_recall_at_1(run: Run, example: Example) -> dict[str, Any]:
+def evaluate_document_recall(run: Run, example: Example) -> dict[str, Any]:
+    """Считает, нашел ли Агент все ожидаемые документы."""
     test_case = _build_test_case(run, example)
     if not test_case:
-        return {"key": "Recall@1", "score": 0.0}
+        return {"key": "Doc_Recall", "score": 0.0}
 
-    metric = RecallAtKMetric(k=1, threshold=0.0)
+    # Используем наш новый класс без параметра K
+    metric = DocumentRecallMetric(threshold=0.0)
     metric.measure(test_case)
-    return {"key": "Recall@1", "score": metric.score, "comment": metric.reason}
-
-
-def evaluate_recall_at_3(run: Run, example: Example) -> dict[str, Any]:
-    test_case = _build_test_case(run, example)
-    if not test_case:
-        return {"key": "Recall@3", "score": 0.0}
-
-    metric = RecallAtKMetric(k=3, threshold=0.0)
-    metric.measure(test_case)
-    return {"key": "Recall@3", "score": metric.score, "comment": metric.reason}
-
-
-def evaluate_recall_at_10(run: Run, example: Example) -> dict[str, Any]:
-    test_case = _build_test_case(run, example)
-    if not test_case:
-        return {"key": "Recall@10", "score": 0.0}
-
-    metric = RecallAtKMetric(k=10, threshold=0.0)
-    metric.measure(test_case)
-    return {"key": "Recall@10", "score": metric.score, "comment": metric.reason}
+    return {"key": "Doc_Recall", "score": metric.score, "comment": metric.reason}
 
 
 def eval_contextual_recall(run: Run, example: Example) -> dict[str, Any]:

@@ -38,7 +38,6 @@ def sync_csv_to_langsmith(dataset_name: str, csv_content: str) -> None:
     """Парсит CSV и загружает в LangSmith с метаданными."""
     client = Client()
 
-    # 1. Парсим CSV
     reader = csv.DictReader(io.StringIO(csv_content))
 
     inputs = []
@@ -59,7 +58,6 @@ def sync_csv_to_langsmith(dataset_name: str, csv_content: str) -> None:
             }
         )
 
-    # 2. Пересоздаем датасет
     if client.has_dataset(dataset_name=dataset_name):
         logger.info(f"Deleting old dataset {dataset_name}...")
         client.delete_dataset(dataset_name=dataset_name)
@@ -68,7 +66,6 @@ def sync_csv_to_langsmith(dataset_name: str, csv_content: str) -> None:
         dataset_name=dataset_name, description="Gold Benchmark (CSV)"
     )
 
-    # 3. Загружаем все батчем
     client.create_examples(
         inputs=inputs,
         outputs=outputs,
@@ -79,22 +76,15 @@ def sync_csv_to_langsmith(dataset_name: str, csv_content: str) -> None:
 
 
 if __name__ == "__main__":
-    # Настраиваем логирование, чтобы видеть процесс в терминале
     logging.basicConfig(level=logging.INFO)
 
-    # 1. Задай имя твоего тестового датасета
-    DATASET_NAME = "RAG_Gold_Benchmark_v1"
-
-    # 2. Укажи путь к локальному CSV файлу (например, создай папку data/ в корне проекта)
-    LOCAL_CSV_PATH = "evaluation_data/ground_truth_test.csv"
-
+    DATASET_NAME = "RAG_Gold_Benchmark"
+    LOCAL_CSV_PATH = "evaluation_data/ground_truth.csv"
     logger.info(f"Начинаем загрузку локального датасета из {LOCAL_CSV_PATH}...")
 
     try:
-        # Читаем локальный файл
+        # read and save to langsmith
         csv_data = get_benchmark_from_local(LOCAL_CSV_PATH)
-
-        # Отправляем в LangSmith
         sync_csv_to_langsmith(DATASET_NAME, csv_data)
 
         logger.info("✅ Загрузка успешно завершена! Проверь дашборд LangSmith.")

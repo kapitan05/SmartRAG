@@ -16,8 +16,24 @@ def extract_sources(text: str) -> set[str]:
     and returns a list of unique filenames.
     """
     matches = re.findall(r"\[SOURCE:\s*(.+?)\]", text)
-    # Приводим к нижнему регистру и удаляем пробелы для надежности
     return set(m.strip().lower() for m in matches)
+
+
+def is_source_match(expected: str, retrieved: str) -> bool:
+    """
+    Smart comparison of source filenames that ignores case,
+    punctuation, and common delimiters,
+    """
+    # (msft, 2023q3nvda)
+    exp_clean = re.sub(r"[^a-z0-9]", "", expected.lower().replace(".pdf", ""))
+    ret_clean = re.sub(r"[^a-z0-9]", "", retrieved.lower().replace(".pdf", ""))
+
+    if not exp_clean or not ret_clean:
+        return False
+
+    # expected 'msft', we got '2023q3msft' -> True
+    # expected '2023q3nvda', we got '2023q3nvda' -> True
+    return exp_clean in ret_clean or ret_clean in exp_clean
 
 
 class WordF1Metric(BaseMetric):  # type: ignore
@@ -93,7 +109,6 @@ class DocumentPrecisionMetric(BaseMetric):  # type: ignore
         self.reason: str | None = None
 
     def measure(self, test_case: LLMTestCase) -> float:
-        # Берем ВЕСЬ контекст, без среза по K
         retrieved_calls: list[str] = (
             test_case.retrieval_context if test_case.retrieval_context else []
         )
@@ -125,10 +140,12 @@ class DocumentPrecisionMetric(BaseMetric):  # type: ignore
             self.reason = "No sources could be extracted from retrieval_context."
             return self.score
 
-        # 3. Считаем пересечение
-        hits = len(expected_sources.intersection(retrieved_sources))
+        hits = 0
+        for ret in retrieved_sources:
+            if any(is_source_match(exp, ret) for exp in expected_sources):
+                hits += 1
 
-        # Precision: Какая доля из найденных Агентом документов была правильной?
+        # Precision: what proportion of retrieved documents were correct?
         self.score = hits / len(retrieved_sources)
         self.success = self.score >= self.threshold
         self.reason = f"Out of {len(retrieved_sources)} unique docs retrieved by Agent, {hits} were correct."
@@ -155,7 +172,6 @@ class DocumentRecallMetric(BaseMetric):  # type: ignore
         self.reason: str | None = None
 
     def measure(self, test_case: LLMTestCase) -> float:
-        # Берем ВЕСЬ контекст, без среза по K
         retrieved_calls: list[str] = (
             test_case.retrieval_context if test_case.retrieval_context else []
         )
@@ -173,7 +189,8 @@ class DocumentRecallMetric(BaseMetric):  # type: ignore
             self.success = False
             return self.score
 
-        # 1. Собираем ожидаемые файлы
+        # Expected: [SOURCE: msft_2023q3.pdf], [SOURCE: nvda_2023q3.pdf]
+        # Retrieved: [SOURCE: 2023q3msft.pdf]
         expected_sources = set()
         for exp in expected:
             extracted = extract_sources(exp)
@@ -182,15 +199,17 @@ class DocumentRecallMetric(BaseMetric):  # type: ignore
             else:
                 expected_sources.add(exp.strip().lower())
 
-        # 2. Собираем ВСЕ уникальные файлы, которые Агент нашел за все вызовы
         retrieved_sources = set()
         for ret in retrieved_calls:
             retrieved_sources.update(extract_sources(ret))
 
-        # 3. Считаем пересечение
-        hits = len(expected_sources.intersection(retrieved_sources))
+        hits = 0
+        for exp in expected_sources:
+            # Can an agent find the expected document in ANY of its retrieval calls?
+            if any(is_source_match(exp, ret) for ret in retrieved_sources):
+                hits += 1
 
-        # Recall: Какую долю из ожидаемых документов Агент смог найти?
+        # Recall: what proportion of expected documents were found by the Agent?
         self.score = hits / len(expected_sources) if expected_sources else 0.0
         self.success = self.score >= self.threshold
         self.reason = f"Found {hits} out of {len(expected_sources)} expected docs across all Agent retrievals."

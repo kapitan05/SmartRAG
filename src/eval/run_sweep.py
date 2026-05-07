@@ -7,13 +7,18 @@ logging.basicConfig(level=logging.INFO)
 
 
 async def run_grid_search() -> None:
-    experiments1 = [
-        {"prefix": "k3_temp0", "config": {"retriever_k": 3, "temperature": 0.0}},
-        {"prefix": "k5_temp0", "config": {"retriever_k": 5, "temperature": 0.0}},
-        {"prefix": "k10_temp0", "config": {"retriever_k": 10, "temperature": 0.0}},
-        {"prefix": "k5_temp0.5", "config": {"retriever_k": 5, "temperature": 0.5}},
+    dataset = "RAG_Gold_Benchmark_v2"
+
+    # EXPERIMENT 1: Top-K and Temperature (Generation constraints)
+    generation_experiments = [
+        {"prefix": "Gen_K3_Temp0", "config": {"retriever_k": 3, "temperature": 0.0}},
+        {"prefix": "Gen_K5_Temp0", "config": {"retriever_k": 5, "temperature": 0.0}},
+        {"prefix": "Gen_K10_Temp0", "config": {"retriever_k": 10, "temperature": 0.0}},
+        {"prefix": "Gen_K5_Temp0.5", "config": {"retriever_k": 5, "temperature": 0.5}},
     ]
-    experiments2 = [
+
+    # EXPERIMENT 2: Search Algorithms (Retrieval performance)
+    retrieval_experiments = [
         {
             "prefix": "Search_Dense_Only_K5",
             "config": {"search_algorithm": "dense", "retriever_k": 5},
@@ -28,11 +33,36 @@ async def run_grid_search() -> None:
         },
     ]
 
-    for exp in experiments2:
+    # EXPERIMENT 3: Prompt Engineering (Agent behavior)
+    prompt_experiments = [
+        {
+            "prefix": "Prompt_v3_Baseline",
+            "config": {
+                "prompt_version": "v3_baseline",
+                "search_algorithm": "hybrid",
+                "retriever_k": 5,
+            },
+        },
+        {
+            "prefix": "Prompt_v4_Avoid_Duplicate_Searches",
+            "config": {
+                "prompt_version": "v4_avoid_duplicate_searches",
+                "search_algorithm": "hybrid",
+                "retriever_k": 5,
+            },
+        },
+    ]
+
+    # which experiments to run? control with these flags
+    active_experiments = prompt_experiments
+
+    print(f"🚀 Initializing Grid Search for {len(active_experiments)} experiments...")
+
+    for exp in active_experiments:
         print(f"\n{'=' * 50}\n🚀 STARTING EXPERIMENT: {exp['prefix']}\n{'=' * 50}")
         try:
             await run_ab_experiment(
-                dataset_name="RAG_Gold_Benchmark_v1",
+                dataset_name=dataset,
                 experiment_prefix=str(exp["prefix"]),
                 config_overrides=exp["config"],  # type: ignore[arg-type]
             )

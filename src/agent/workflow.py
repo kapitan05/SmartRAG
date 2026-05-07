@@ -2,13 +2,19 @@ from typing import Any, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
+# from agent import state
 from src.agent.state import AgentState, CriticFeedback
-from src.prompts.system import AGENT_SYSTEM_PROMPT, CRITIC_SYSTEM_PROMPT
+from src.prompts.system import (
+    CRITIC_SYSTEM_PROMPT,
+    PROMPT_VERSIONS,
+    AGENT_SYSTEM_PROMPT_v3,
+)
 from src.prompts.templates import CRITIC_EVALUATION_TEMPLATE
 
 
@@ -19,11 +25,15 @@ class RAGWorkflow:
         self.llm_with_tools = self.llm.bind_tools(self.tools, parallel_tool_calls=False)
         self.critic_llm = self.llm.with_structured_output(CriticFeedback)
 
-    def agent_node(self, state: AgentState) -> dict[str, Any]:
+    def agent_node(self, state: AgentState, config: RunnableConfig) -> dict[str, Any]:
         """Main Agent node."""
         messages = state["messages"]
-        system_message = SystemMessage(content=AGENT_SYSTEM_PROMPT)
+        configurable = config.get("configurable", {})
+        prompt_version_name = configurable.get("prompt_version", "v3_baseline")
+        prompt_text = PROMPT_VERSIONS.get(prompt_version_name, AGENT_SYSTEM_PROMPT_v3)
+        system_message = SystemMessage(content=prompt_text)
         messages_to_send = [system_message] + messages
+
         response = self.llm_with_tools.invoke(messages_to_send)
 
         return {"messages": [response]}

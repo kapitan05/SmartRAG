@@ -5,9 +5,6 @@ from pathlib import Path
 from typing import Any, cast
 
 from dotenv import load_dotenv
-
-# Раскомментируй импорт google.cloud в продакшне
-# from google.cloud import storage
 from langsmith import Client
 
 logger = logging.getLogger(__name__)
@@ -15,17 +12,17 @@ load_dotenv()
 
 
 def get_benchmark_from_local(file_path: str) -> str:
-    """Читает локальный CSV файл и возвращает его содержимое как строку."""
+    """Read local CSV file as a string (for development)."""
     path = Path(file_path)
     if not path.exists():
-        raise FileNotFoundError(f"Локальный файл не найден: {file_path}")
+        raise FileNotFoundError(f"Local file not found: {file_path}")
 
     # Path.read_text автоматически открывает и безопасно закрывает файл
     return path.read_text(encoding="utf-8")
 
 
 def get_benchmark_from_gcs(bucket_name: str, file_path: str) -> str:
-    """Скачивает CSV из GCS как строку (для production)."""
+    """Downloads CSV from GCS as a string (for production)."""
     # storage_client = storage.Client()
     # bucket = storage_client.bucket(bucket_name)
     # blob = bucket.blob(file_path)
@@ -35,7 +32,7 @@ def get_benchmark_from_gcs(bucket_name: str, file_path: str) -> str:
 
 
 def sync_csv_to_langsmith(dataset_name: str, csv_content: str) -> None:
-    """Парсит CSV и загружает в LangSmith с метаданными."""
+    """Parses CSV and uploads to LangSmith with metadata."""
     client = Client()
 
     reader = csv.DictReader(io.StringIO(csv_content))
@@ -49,7 +46,7 @@ def sync_csv_to_langsmith(dataset_name: str, csv_content: str) -> None:
         inputs.append({"question": row.get("Question", "")})
         # LangSmith Outputs
         outputs.append({"expected_answer": row.get("Answer", "")})
-        # LangSmith Metadata (Супер-фича для фильтрации в дашборде!)
+        # LangSmith Metadata (Super-feature for filtering in the dashboard!)
         metadata.append(
             {
                 "source_docs": row.get("Source Docs", ""),
@@ -78,19 +75,19 @@ def sync_csv_to_langsmith(dataset_name: str, csv_content: str) -> None:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    DATASET_NAME = "RAG_Gold_Benchmark"
-    LOCAL_CSV_PATH = "evaluation_data/ground_truth.csv"
-    logger.info(f"Начинаем загрузку локального датасета из {LOCAL_CSV_PATH}...")
+    DATASET_NAME = "RAG_Gold_Benchmark_v2"
+    LOCAL_CSV_PATH = "evaluation_data/ground_truth_test.csv"
+    logger.info(f"Starting upload of local dataset from {LOCAL_CSV_PATH}...")
 
     try:
         # read and save to langsmith
         csv_data = get_benchmark_from_local(LOCAL_CSV_PATH)
         sync_csv_to_langsmith(DATASET_NAME, csv_data)
 
-        logger.info("✅ Загрузка успешно завершена! Проверь дашборд LangSmith.")
+        logger.info("✅ Upload completed successfully! Check the LangSmith dashboard.")
 
     except FileNotFoundError as e:
-        logger.error(f"❌ Ошибка: {e}")
-        logger.info("Пожалуйста, создай файл с тестовыми данными по указанному пути.")
+        logger.error(f"❌ Error: {e}")
+        logger.info("Please create a file with test data at the specified path.")
     except Exception as e:
-        logger.error(f"❌ Произошла непредвиденная ошибка: {e}")
+        logger.error(f"❌ An unexpected error occurred: {e}")

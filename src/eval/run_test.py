@@ -156,11 +156,18 @@ if __name__ == "__main__":
         "This helps identify the experiment in LangSmith and MLflow.",
     )
 
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        required=True,
+        help="Name of the dataset to use for evaluation.",
+    )
+
     args = parser.parse_args()
 
     asyncio.run(
         run_ab_experiment(
-            dataset_name="RAG_Gold_Benchmark_v1",
+            dataset_name=args.dataset,
             experiment_prefix=args.prefix,
             config_overrides={"temperature": 0.2, "retriever_k": 5},
         )

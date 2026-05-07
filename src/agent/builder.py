@@ -4,7 +4,7 @@ from typing import Any
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_qdrant import FastEmbedSparse
 from langgraph.graph.state import CompiledStateGraph
-from qdrant_client import QdrantClient  # Импортируй свой класс графа
+from qdrant_client import QdrantClient
 
 from src.agent.workflow import RAGWorkflow
 from src.core.config import settings

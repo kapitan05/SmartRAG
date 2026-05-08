@@ -9,43 +9,54 @@ from src.agent.builder import build_rag_graph
 eval_graph = build_rag_graph()
 
 
-async def rag_eval_wrapper(inputs: dict[str, Any]) -> dict[str, Any]:
+def make_rag_eval_wrapper(config_overrides: dict[str, Any]) -> Any:
     """
-    Wrapper for running the RAG evaluation graph.
-    This function will be called by LangSmith's evaluation framework.
-    It takes a question as input, runs the RAG graph,
-    and extracts both the final answer and the retrieved documents for evaluation.
+    FACTORY FUNCTION: This wraps the evaluation logic and bakes in the
+    experiment's specific configurations (e.g., retriever_k, use_planner, prompt_version).
     """
-    question: str = inputs["question"]
 
-    # unique thread_id for LangSmith
-    thread_id = str(uuid.uuid4())
-    config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+    async def rag_eval_wrapper(inputs: dict[str, Any]) -> dict[str, Any]:
+        """
+        Wrapper for running the RAG evaluation graph.
+        This function will be called by LangSmith's evaluation framework.
+        It takes a question as input, runs the RAG graph,
+        and extracts both the final answer and the retrieved documents for evaluation.
+        """
+        question: str = inputs["question"]
 
-    # graph state with initial question
-    initial_state = {
-        "user_id": "evaluator_bot",
-        "query": question,
-        "messages": [HumanMessage(content=question)],
-    }
+        # unique thread_id for LangSmith
+        thread_id = str(uuid.uuid4())
 
-    result_state = await eval_graph.ainvoke(initial_state, config=config)
+        merged_config = {**config_overrides, "thread_id": thread_id}
 
-    messages = result_state.get("messages", [])
+        config: RunnableConfig = {"configurable": merged_config}
 
-    retrieved_texts = []
-    for msg in messages:
-        if getattr(msg, "type", "") == "tool":
-            retrieved_texts.append(str(msg.content))
+        # graph state with initial question
+        initial_state = {
+            "user_id": "evaluator_bot",
+            "query": question,
+            "messages": [HumanMessage(content=question)],
+        }
 
-    if "answer" in result_state:
-        final_answer = result_state["answer"]
-    elif messages:
-        final_answer = messages[-1].content
-    else:
-        final_answer = "Error: Could not extract answer from state."
+        result_state = await eval_graph.ainvoke(initial_state, config=config)
 
-    return {
-        "answer": final_answer,
-        "retrieved_docs": retrieved_texts,
-    }
+        messages = result_state.get("messages", [])
+
+        retrieved_texts = []
+        for msg in messages:
+            if getattr(msg, "type", "") == "tool":
+                retrieved_texts.append(str(msg.content))
+
+        if "answer" in result_state:
+            final_answer = result_state["answer"]
+        elif messages:
+            final_answer = messages[-1].content
+        else:
+            final_answer = "Error: Could not extract answer from state."
+
+        return {
+            "answer": final_answer,
+            "retrieved_docs": retrieved_texts,
+        }
+
+    return rag_eval_wrapper

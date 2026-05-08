@@ -7,9 +7,7 @@ from typing import Any
 import mlflow
 import pandas as pd
 from dotenv import load_dotenv
-from langsmith import Client
 from langsmith.evaluation import aevaluate
-from langsmith.schemas import Example
 
 from src.eval.graders import (
     eval_answer_relevancy,
@@ -19,7 +17,7 @@ from src.eval.graders import (
     evaluate_document_recall,
     evaluate_word_f1,
 )
-from src.eval.wrappers import rag_eval_wrapper
+from src.eval.wrappers import make_rag_eval_wrapper
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -67,8 +65,9 @@ async def run_ab_experiment(
         # ---------------------------------------------------------
         logger.info("Triggering LangSmith async evaluation...")
         try:
+            custom_eval_wrapper = make_rag_eval_wrapper(config_overrides)
             experiment_results = await aevaluate(
-                rag_eval_wrapper,
+                custom_eval_wrapper,
                 data=dataset_name,
                 evaluators=[
                     eval_contextual_recall,

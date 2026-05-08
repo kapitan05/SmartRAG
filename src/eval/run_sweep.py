@@ -53,8 +53,30 @@ async def run_grid_search() -> None:
         },
     ]
 
+    # EXPERIMENT: Planner vs No Planner
+    planner_experiments = [
+        {
+            "prefix": "Agent_Standard_Single_Shot",
+            "config": {
+                "prompt_version": "v4_strict_metadata",
+                "use_planner": False,
+                "retriever_k": 5,
+                "search_algorithm": "hybrid",
+            },
+        },
+        {
+            "prefix": "Agent_With_Query_Decomposition",
+            "config": {
+                "prompt_version": "v4_strict_metadata",
+                "use_planner": True,
+                "retriever_k": 5,
+                "search_algorithm": "hybrid",
+            },
+        },
+    ]
+
     # which experiments to run? control with these flags
-    active_experiments = prompt_experiments
+    active_experiments = planner_experiments
 
     print(f"🚀 Initializing Grid Search for {len(active_experiments)} experiments...")
 

@@ -36,3 +36,12 @@ class SECSearchSchema(BaseModel):
         "['Q1', 'Q2', 'Q3', 'Q4']). Leave as None if "
         "the quarter is not specified.",
     )
+
+
+class SearchPlan(BaseModel):
+    """A list of parallel search queries to execute."""
+
+    queries: List[SECSearchSchema] = Field(
+        description="List of specific, independent tool calls to make."
+        " Break multi-year or multi-company comparisons into separate queries."
+    )

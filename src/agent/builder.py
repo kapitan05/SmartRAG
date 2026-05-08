@@ -13,8 +13,9 @@ from src.tools.sec_search import make_sec_search_tool
 
 def build_rag_graph() -> CompiledStateGraph[Any, Any, Any, Any]:
     """
-    Единая точка сборки (Factory) для нашего графа.
-    Гарантирует, что API и тесты используют идентичные настройки.
+    Build and compile the RAG graph with the agent workflow and tools.
+    This function initializes the necessary components (LLM, tools) and constructs
+    the graph.
     """
     # data base + models + tools
     qdrant_client = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)

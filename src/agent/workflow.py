@@ -1,7 +1,8 @@
+import uuid
 from typing import Any, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, StateGraph
@@ -10,8 +11,10 @@ from langgraph.prebuilt import ToolNode
 
 # from agent import state
 from src.agent.state import AgentState, CriticFeedback
+from src.api.schemas import SearchPlan
 from src.prompts.system import (
     CRITIC_SYSTEM_PROMPT,
+    PLANNER_SYSTEM_PROMPT,
     PROMPT_VERSIONS,
     AGENT_SYSTEM_PROMPT_v3,
 )
@@ -89,6 +92,50 @@ class RAGWorkflow:
             "revisions": revisions + 1,
         }
 
+    def planner_node(self, state: AgentState) -> dict[str, Any]:
+        """Intercepts the question and decomposes it into parallel tool calls."""
+        messages = state["messages"]
+        user_query = messages[-1].content
+
+        # Bind the structured output schema to the LLM
+        planner_llm = self.llm.with_structured_output(SearchPlan)
+
+        # get the decomposed plan
+        plan = cast(
+            SearchPlan,
+            planner_llm.invoke(
+                [
+                    SystemMessage(content=PLANNER_SYSTEM_PROMPT),
+                    HumanMessage(content=str(user_query)),
+                ]
+            ),
+        )
+
+        # a standard Tool Call list
+        tool_calls = []
+        for q in plan.queries:
+            tool_calls.append(
+                {
+                    "name": "search_sec_reports",
+                    "args": q.model_dump(exclude_none=True),
+                    "id": str(uuid.uuid4()),
+                }
+            )
+
+        # create an AIMessage pretending the Agent requested these tools
+        ai_msg = AIMessage(content="", tool_calls=tool_calls)
+
+        return {"messages": [ai_msg]}
+
+    @staticmethod
+    def route_start(state: AgentState, config: RunnableConfig) -> str:
+        """Dynamically routes to the planner or directly to the agent based on config."""
+        use_planner = config.get("configurable", {}).get("use_planner", False)
+
+        if use_planner:
+            return "planner"
+        return "agent"
+
     @staticmethod
     def should_continue_agent(state: AgentState) -> str:
         last_message = state["messages"][-1]
@@ -105,11 +152,17 @@ class RAGWorkflow:
     def compile(self) -> CompiledStateGraph[Any, Any, Any]:
         """Сборка графа."""
         workflow = StateGraph(AgentState)
+        workflow.add_node("planner", self.planner_node)
         workflow.add_node("agent", self.agent_node)
         workflow.add_node("tools", ToolNode(self.tools))
         workflow.add_node("critic", self.critic_node)
 
-        workflow.add_edge(START, "agent")
+        workflow.set_conditional_entry_point(
+            self.route_start, {"planner": "planner", "agent": "agent"}
+        )
+
+        workflow.add_edge("planner", "tools")
+
         workflow.add_conditional_edges(
             "agent", self.should_continue_agent, {"tools": "tools", "critic": "critic"}
         )

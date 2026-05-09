@@ -6,7 +6,14 @@ from langchain_core.runnables import RunnableConfig
 
 from src.agent.builder import build_rag_graph
 
-eval_graph = build_rag_graph()
+_cached_graph = None
+
+
+def get_eval_graph() -> Any:
+    global _cached_graph
+    if _cached_graph is None:
+        _cached_graph = build_rag_graph()
+    return _cached_graph
 
 
 def make_rag_eval_wrapper(config_overrides: dict[str, Any]) -> Any:
@@ -22,13 +29,12 @@ def make_rag_eval_wrapper(config_overrides: dict[str, Any]) -> Any:
         It takes a question as input, runs the RAG graph,
         and extracts both the final answer and the retrieved documents for evaluation.
         """
-        question: str = inputs["question"]
+        graph_eval = get_eval_graph()
 
+        question: str = inputs["question"]
         # unique thread_id for LangSmith
         thread_id = str(uuid.uuid4())
-
         merged_config = {**config_overrides, "thread_id": thread_id}
-
         config: RunnableConfig = {"configurable": merged_config}
 
         # graph state with initial question
@@ -38,7 +44,7 @@ def make_rag_eval_wrapper(config_overrides: dict[str, Any]) -> Any:
             "messages": [HumanMessage(content=question)],
         }
 
-        result_state = await eval_graph.ainvoke(initial_state, config=config)
+        result_state = await graph_eval.ainvoke(initial_state, config=config)
 
         messages = result_state.get("messages", [])
 

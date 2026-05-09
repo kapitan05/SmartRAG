@@ -1,97 +1,161 @@
 import asyncio
 import logging
+import subprocess
+from typing import Any, Dict, List
 
 from src.eval.run_test import run_ab_experiment
 
 logging.basicConfig(level=logging.INFO)
 
 
-async def run_grid_search() -> None:
+# Top-K and Temperature (Generation constraints)
+generation_experiments: List[Dict[str, Any]] = [
+    {"prefix": "Gen_K3_Temp0", "config": {"retriever_k": 3, "temperature": 0.0}},
+    {"prefix": "Gen_K5_Temp0", "config": {"retriever_k": 5, "temperature": 0.0}},
+    {"prefix": "Gen_K10_Temp0", "config": {"retriever_k": 10, "temperature": 0.0}},
+    {"prefix": "Gen_K5_Temp0.5", "config": {"retriever_k": 5, "temperature": 0.5}},
+]
+
+# Search Algorithms (Retrieval performance)
+retrieval_experiments: List[Dict[str, Any]] = [
+    {
+        "prefix": "Search_Dense_Only_K5",
+        "config": {"search_algorithm": "dense", "retriever_k": 5},
+    },
+    {
+        "prefix": "Search_BM25_Only_K5",
+        "config": {"search_algorithm": "bm25", "retriever_k": 5},
+    },
+    {
+        "prefix": "Search_Hybrid_RRF_K5",
+        "config": {"search_algorithm": "hybrid", "retriever_k": 5},
+    },
+]
+
+# Prompt Engineering (Agent behavior)
+prompt_experiments: List[Dict[str, Any]] = [
+    {
+        "prefix": "Prompt_v3_Baseline",
+        "config": {
+            "prompt_version": "v3_baseline",
+            "search_algorithm": "hybrid",
+            "retriever_k": 5,
+            "collection_name": "sec_reports",
+        },
+    },
+    {
+        "prefix": "Prompt_v4_Avoid_Duplicate_Searches",
+        "config": {
+            "prompt_version": "v4_avoid_duplicate_searches",
+            "search_algorithm": "hybrid",
+            "retriever_k": 5,
+            "collection_name": "sec_reports",
+        },
+    },
+]
+
+# Planner vs No Planner
+planner_experiments: List[Dict[str, Any]] = [
+    {
+        "prefix": "Agent_Standard_Single_Shot",
+        "config": {
+            "prompt_version": "v4_strict_metadata",
+            "use_planner": False,
+            "retriever_k": 5,
+            "search_algorithm": "hybrid",
+            "collection_name": "sec_reports",
+        },
+    },
+    {
+        "prefix": "Agent_With_Query_Decomposition",
+        "config": {
+            "prompt_version": "v4_strict_metadata",
+            "use_planner": True,
+            "retriever_k": 5,
+            "search_algorithm": "hybrid",
+            "collection_name": "sec_reports",
+        },
+    },
+]
+
+#  Chunking Configs
+chunking_configs: List[Dict[str, Any]] = [
+    {"size": 8000, "overlap": 400},
+    {"size": 2000, "overlap": 200},
+    {"size": 4000, "overlap": 400},
+]
+
+# Experiment set with the 'ingest' key to trigger ingestion
+chunking_experiments: List[Dict[str, Any]] = [
+    {
+        "prefix": f"Chunk_{cfg['size']}_{cfg['overlap']}",
+        "config": {
+            "collection_name": f"sec_reports_cs{cfg['size']}_co{cfg['overlap']}",
+            "retriever_k": 5,
+        },
+        "ingest_params": cfg,
+    }
+    for cfg in chunking_configs
+]
+
+
+async def run_unified_sweep() -> None:
     dataset = "RAG_Gold_Benchmark_v2"
 
-    # EXPERIMENT 1: Top-K and Temperature (Generation constraints)
-    generation_experiments = [
-        {"prefix": "Gen_K3_Temp0", "config": {"retriever_k": 3, "temperature": 0.0}},
-        {"prefix": "Gen_K5_Temp0", "config": {"retriever_k": 5, "temperature": 0.0}},
-        {"prefix": "Gen_K10_Temp0", "config": {"retriever_k": 10, "temperature": 0.0}},
-        {"prefix": "Gen_K5_Temp0.5", "config": {"retriever_k": 5, "temperature": 0.5}},
-    ]
+    # Choose which lists to run
+    active_experiments = chunking_experiments + planner_experiments
 
-    # EXPERIMENT 2: Search Algorithms (Retrieval performance)
-    retrieval_experiments = [
-        {
-            "prefix": "Search_Dense_Only_K5",
-            "config": {"search_algorithm": "dense", "retriever_k": 5},
-        },
-        {
-            "prefix": "Search_BM25_Only_K5",
-            "config": {"search_algorithm": "bm25", "retriever_k": 5},
-        },
-        {
-            "prefix": "Search_Hybrid_RRF_K5",
-            "config": {"search_algorithm": "hybrid", "retriever_k": 5},
-        },
-    ]
-
-    # EXPERIMENT 3: Prompt Engineering (Agent behavior)
-    prompt_experiments = [
-        {
-            "prefix": "Prompt_v3_Baseline",
-            "config": {
-                "prompt_version": "v3_baseline",
-                "search_algorithm": "hybrid",
-                "retriever_k": 5,
-            },
-        },
-        {
-            "prefix": "Prompt_v4_Avoid_Duplicate_Searches",
-            "config": {
-                "prompt_version": "v4_avoid_duplicate_searches",
-                "search_algorithm": "hybrid",
-                "retriever_k": 5,
-            },
-        },
-    ]
-
-    # EXPERIMENT: Planner vs No Planner
-    planner_experiments = [
-        {
-            "prefix": "Agent_Standard_Single_Shot",
-            "config": {
-                "prompt_version": "v4_strict_metadata",
-                "use_planner": False,
-                "retriever_k": 5,
-                "search_algorithm": "hybrid",
-            },
-        },
-        {
-            "prefix": "Agent_With_Query_Decomposition",
-            "config": {
-                "prompt_version": "v4_strict_metadata",
-                "use_planner": True,
-                "retriever_k": 5,
-                "search_algorithm": "hybrid",
-            },
-        },
-    ]
-
-    # which experiments to run? control with these flags
-    active_experiments = planner_experiments
-
-    print(f"🚀 Initializing Grid Search for {len(active_experiments)} experiments...")
+    print(f"🚀 Initializing Unified Sweep for {len(active_experiments)} experiments...")
 
     for exp in active_experiments:
-        print(f"\n{'=' * 50}\n🚀 STARTING EXPERIMENT: {exp['prefix']}\n{'=' * 50}")
+        print(f"\n{'=' * 60}\n🚀 STARTING: {exp['prefix']}\n{'=' * 60}")
+
+        # ingestion check
+        if "ingest_params" in exp:
+            params = exp["ingest_params"]
+            coll_name = exp["config"]["collection_name"]
+
+            print(f"🏗️  PRE-STEP: Ingesting data into {coll_name}...")
+            try:
+                # We use 'uv run' to ensure we stay in the same GCP environment
+                subprocess.run(
+                    [
+                        "uv",
+                        "run",
+                        "python",
+                        "-m",
+                        "src.data.ingest",
+                        "--chunk-size",
+                        str(params["size"]),
+                        "--chunk-overlap",
+                        str(params["overlap"]),
+                        "--collection",
+                        coll_name,
+                    ],
+                    check=True,
+                )
+                print("✅ Ingestion successful.")
+            except subprocess.CalledProcessError as e:
+                print(
+                    (
+                        f"❌ Ingestion failed for {coll_name}, "
+                        f" skipping experiment. Error: {e}"
+                    )
+                )
+                continue
+
+        # RUN EVALUATION
         try:
             await run_ab_experiment(
                 dataset_name=dataset,
                 experiment_prefix=str(exp["prefix"]),
-                config_overrides=exp["config"],  # type: ignore[arg-type]
+                config_overrides=exp["config"],
             )
         except Exception as e:
-            print(f"❌ Error in {exp['prefix']}: {e}")
+            print(f"❌ Evaluation Error in {exp['prefix']}: {e}")
             continue
 
 
 if __name__ == "__main__":
-    asyncio.run(run_grid_search())
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(run_unified_sweep())

@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, List, Optional
 
 from langchain_core.embeddings import Embeddings
@@ -7,11 +8,14 @@ from langchain_qdrant import (
     FastEmbedSparse,
     QdrantVectorStore,
     RetrievalMode,
-    sparse_embeddings,
 )
 from qdrant_client import QdrantClient, models
 
 from src.api.schemas import SECSearchSchema
+
+# Global lock to prevent CPU/RAM spikes on the cloud server
+# when the Planner calls this tool multiple times in parallel.
+SEARCH_LOCK = asyncio.Lock()
 
 
 def make_sec_search_tool(
@@ -38,6 +42,7 @@ def make_sec_search_tool(
         search_algorithm = config_safe.get("configurable", {}).get(
             "search_algorithm", "hybrid"
         )
+        collection = config_safe["configurable"].get("collection_name", "sec_reports")
 
         if search_algorithm == "dense":
             mode = RetrievalMode.DENSE
@@ -77,14 +82,17 @@ def make_sec_search_tool(
         # (this does NOT do any network calls, just sets up the wrapper around Qdrant)
         vector_store = QdrantVectorStore(
             client=qdrant_client,
-            collection_name="sec_reports",
+            collection_name=collection,
             embedding=embeddings,
             sparse_embedding=sparse_embeddings,
             sparse_vector_name="bm25",
             retrieval_mode=mode,
         )
 
-        docs = await vector_store.asimilarity_search(query, k=k, filter=qdrant_filter)
+        async with SEARCH_LOCK:
+            docs = await vector_store.asimilarity_search(
+                query, k=k, filter=qdrant_filter
+            )
 
         if not docs:
             return "No documents found matching the applied filters.", []
@@ -93,7 +101,10 @@ def make_sec_search_tool(
         for doc in docs:
             text = doc.page_content
             meta = doc.metadata
-            fallback_source = f"{meta.get('year', '')} {meta.get('quarter', '')} {meta.get('ticker', '')}.pdf".strip()
+            fallback_source = (
+                f"{meta.get('year', '')} {meta.get('quarter', '')}"
+                f" {meta.get('ticker', '')}.pdf"
+            ).strip()
             source_file = meta.get("source", fallback_source)
             context_texts.append(f"{text}\n\n[SOURCE: {source_file}]")
 

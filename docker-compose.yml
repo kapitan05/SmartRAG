@@ -83,6 +83,8 @@ services:
     container_name: grafana
     ports:
       - "3000:3000"
+    volumes:
+      - grafana_storage:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 
@@ -91,3 +93,4 @@ volumes:
   mongo_data:
   mlflow_data:
   prometheus_data:
+  grafana_storage:

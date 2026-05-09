@@ -1,3 +1,5 @@
+import argparse
+import asyncio
 import json
 import logging
 import os
@@ -141,7 +143,9 @@ def summarize_chunk(chunk_text: str, document_context: str, llm: ChatOpenAI) -> 
     return str(response.content).strip()
 
 
-def run_ingestion() -> None:
+async def run_ingestion(
+    chunk_size: int, chunk_overlap: int, collection_name: str, data_path: str
+) -> None:
     """
     Executes the complete ingestion pipeline: ensures Qdrant collection exists,
     parses a PDF via Docling, splits Markdown text, and uploads embeddings.
@@ -152,9 +156,9 @@ def run_ingestion() -> None:
     client = QdrantClient(host=qdrant_host, port=qdrant_port)
     client.set_sparse_model("Qdrant/bm25")
 
-    if not client.collection_exists(COLLECTION_NAME):
+    if not client.collection_exists(collection_name):
         client.create_collection(
-            collection_name=COLLECTION_NAME,
+            collection_name=collection_name,
             vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
             sparse_vectors_config={"bm25": models.SparseVectorParams()},
         )
@@ -162,13 +166,13 @@ def run_ingestion() -> None:
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     sparse_embeddings = FastEmbedSparse(model_name="Qdrant/bm25")
 
-    for file_name in os.listdir(DATA_DIR):
+    for file_name in os.listdir(data_path):
         if not file_name.endswith(".pdf"):
             continue
 
         logger.info(f"\n{'=' * 40}\n🚀 STARTING FILE: {file_name}\n{'=' * 40}")
 
-        file_path = os.path.join(DATA_DIR, file_name)
+        file_path = os.path.join(data_path, file_name)
         md_file_path = file_path.replace(".pdf", ".md")
         json_file_path = file_path.replace(".pdf", "_chunks.json")
 
@@ -203,7 +207,7 @@ def run_ingestion() -> None:
 
         # Split: Chunk Size
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=4000, chunk_overlap=400
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap
         )
         final_chunks = text_splitter.split_documents(header_splits)
 
@@ -251,7 +255,7 @@ def run_ingestion() -> None:
             sparse_vector_name="bm25",
             retrieval_mode=RetrievalMode.HYBRID,
             url=f"http://{qdrant_host}:{qdrant_port}",
-            collection_name=COLLECTION_NAME,
+            collection_name=collection_name,
             force_recreate=False,
         )
         logger.info(f"✅ Finished processing {file_name}")
@@ -260,4 +264,21 @@ def run_ingestion() -> None:
 
 
 if __name__ == "__main__":
-    run_ingestion()
+    parser = argparse.ArgumentParser(
+        description="Ingest documents with specific RAG parameters."
+    )
+    parser.add_argument("--chunk-size", type=int, default=4000)
+    parser.add_argument("--chunk-overlap", type=int, default=400)
+    parser.add_argument("--collection", type=str, required=True)
+    parser.add_argument("--data-path", type=str, default=DATA_DIR)
+
+    args = parser.parse_args()
+
+    asyncio.run(
+        run_ingestion(
+            chunk_size=args.chunk_size,
+            chunk_overlap=args.chunk_overlap,
+            collection_name=args.collection,
+            data_path=args.data_path,
+        )
+    )

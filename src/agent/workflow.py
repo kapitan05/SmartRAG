@@ -13,10 +13,10 @@ from langgraph.prebuilt import ToolNode
 from src.agent.state import AgentState, CriticFeedback
 from src.api.schemas import SearchPlan
 from src.prompts.system import (
+    AGENT_SYSTEM_PROMPT,
     CRITIC_SYSTEM_PROMPT,
     PLANNER_SYSTEM_PROMPT,
     PROMPT_VERSIONS,
-    AGENT_SYSTEM_PROMPT_v3,
 )
 from src.prompts.templates import CRITIC_EVALUATION_TEMPLATE
 
@@ -33,7 +33,7 @@ class RAGWorkflow:
         messages = state["messages"]
         configurable = config.get("configurable", {})
         prompt_version_name = configurable.get("prompt_version", "v3_baseline")
-        prompt_text = PROMPT_VERSIONS.get(prompt_version_name, AGENT_SYSTEM_PROMPT_v3)
+        prompt_text = PROMPT_VERSIONS.get(prompt_version_name, AGENT_SYSTEM_PROMPT)
         system_message = SystemMessage(content=prompt_text)
         messages_to_send = [system_message] + messages
 

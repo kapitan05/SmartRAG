@@ -1,24 +1,38 @@
+import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langgraph.graph.state import CompiledStateGraph
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
+from prometheus_client import Counter, Histogram
 from prometheus_fastapi_instrumentator import Instrumentator
-from qdrant_client import QdrantClient
 
 from src.agent.builder import build_rag_graph
-from src.agent.workflow import RAGWorkflow
 from src.api.dependencies import get_chat_history_collection, get_graph
 from src.api.schemas import ChatRequest, ChatResponse
 from src.core.config import settings
 from src.prompts.system import AGENT_SYSTEM_PROMPT
-from src.tools.sec_search import make_sec_search_tool
 
 load_dotenv()
+
+# prometheus+grafana metrics
+LLM_TOKENS_USED = Counter(
+    "rag_llm_tokens_total",
+    "Total tokens consumed by LLM",
+    ["model_name"],
+)
+
+RAG_GENERATION_TIME = Histogram(
+    "rag_generation_duration_seconds", "Time taken for LLM to generate answer"
+)
+
+RAG_REVISIONS_COUNT = Histogram(
+    "rag_agent_revisions_total",
+    "Number of self-correction loops the LangGraph agent needed",
+)
 
 
 @asynccontextmanager
@@ -42,6 +56,7 @@ async def chat_endpoint(
     collection: AsyncIOMotorCollection[Any] = Depends(get_chat_history_collection),
     graph: CompiledStateGraph[Any, Any, Any] = Depends(get_graph),
 ) -> ChatResponse:
+    start_time = time.time()
     try:
         cursor = collection.find({"user_id": request.user_id}).sort("_id", -1).limit(5)
         history_docs = await cursor.to_list(length=5)
@@ -53,13 +68,26 @@ async def chat_endpoint(
 
         messages.append(HumanMessage(content=request.query))
 
-        # Используем инжектированный граф
+        # invoke the RAG graph with the full message history and current query
         final_state = await graph.ainvoke(
             {"messages": messages, "approved": False, "revisions": 0}
         )
 
+        ai_message = final_state["messages"][-1]
         ai_answer = str(final_state["messages"][-1].content)
         revisions_made = final_state.get("revisions", 1) - 1
+        RAG_REVISIONS_COUNT.observe(revisions_made)
+
+        # grafana metrics
+        metadata = getattr(ai_message, "response_metadata", {})
+        token_usage = metadata.get("token_usage", {})
+        total_tokens = token_usage.get("total_tokens", 0)
+        model_name = metadata.get("model", "unknown_model")
+        if total_tokens > 0:
+            LLM_TOKENS_USED.labels(model_name=model_name).inc(total_tokens)
+
+        # total generation time
+        RAG_GENERATION_TIME.observe(time.time() - start_time)
 
         await collection.insert_one(
             {"user_id": request.user_id, "query": request.query, "answer": ai_answer}
@@ -76,7 +104,7 @@ async def clear_context(
     user_id: str,
     collection: AsyncIOMotorCollection[Any] = Depends(get_chat_history_collection),
 ) -> dict[str, Any]:
-    """Удаляет всю историю диалога для конкретного пользователя."""
+    """Delete all chat history for a user to reset context."""
     result = await collection.delete_many({"user_id": user_id})
     return {"status": "success", "deleted_count": result.deleted_count}
 
@@ -87,7 +115,7 @@ async def get_history(
     limit: int = 5,
     collection: AsyncIOMotorCollection[Any] = Depends(get_chat_history_collection),
 ) -> list[dict[str, str]]:
-    """Возвращает последние сообщения для отображения при загрузке UI."""
+    """Returns the last messages for display when loading the UI."""
     cursor = collection.find({"user_id": user_id}).sort("_id", 1)
     docs = await cursor.to_list(length=limit)
     return [{"query": d["query"], "answer": d["answer"]} for d in docs]

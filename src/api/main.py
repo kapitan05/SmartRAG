@@ -68,9 +68,20 @@ async def chat_endpoint(
 
         messages.append(HumanMessage(content=request.query))
 
+        should_use_critic = (
+            request.use_critic
+            if request.use_critic is not None
+            else settings.USE_CRITIC_BY_DEFAULT
+        )
+
         # invoke the RAG graph with the full message history and current query
         final_state = await graph.ainvoke(
-            {"messages": messages, "approved": False, "revisions": 0}
+            {
+                "messages": messages,
+                "approved": False,
+                "revisions": 0,
+                "use_critic": should_use_critic,
+            }
         )
 
         ai_message = final_state["messages"][-1]

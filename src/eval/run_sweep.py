@@ -1,6 +1,8 @@
+import argparse
 import asyncio
 import logging
 import subprocess
+import sys
 from typing import Any, Dict, List
 
 from src.eval.run_test import run_ab_experiment
@@ -78,6 +80,29 @@ planner_experiments: List[Dict[str, Any]] = [
     },
 ]
 
+critic_experiments: List[Dict[str, Any]] = [
+    {
+        "prefix": "Agent_Critic_Disabled_Fast",
+        "config": {
+            "use_critic": False,
+            "prompt_version": "v4_strict_metadata",  # Use your best prompt here
+            "retriever_k": 5,  # Use your best K here
+            "search_algorithm": "hybrid",  # Use your best search here
+            "collection_name": "sec_reports",  # Use your best chunking here
+        },
+    },
+    {
+        "prefix": "Agent_Critic_Enabled_Accurate",
+        "config": {
+            "use_critic": True,
+            "prompt_version": "v4_strict_metadata",
+            "retriever_k": 5,
+            "search_algorithm": "hybrid",
+            "collection_name": "sec_reports",
+        },
+    },
+]
+
 #  Chunking Configs
 chunking_configs: List[Dict[str, Any]] = [
     {"size": 8000, "overlap": 400},
@@ -92,18 +117,38 @@ chunking_experiments: List[Dict[str, Any]] = [
         "config": {
             "collection_name": f"sec_reports_cs{cfg['size']}_co{cfg['overlap']}",
             "retriever_k": 5,
+            "use_critic": False,
         },
         "ingest_params": cfg,
     }
     for cfg in chunking_configs
 ]
 
+EXPERIMENT_SUITES = {
+    "chunking": chunking_experiments,
+    "retrieval": retrieval_experiments,
+    "generation": generation_experiments,
+    "prompt": prompt_experiments,
+    "planner": planner_experiments,
+    "critic": critic_experiments,
+    "all": chunking_experiments
+    + retrieval_experiments
+    + generation_experiments
+    + prompt_experiments
+    + planner_experiments
+    + critic_experiments,
+}
 
-async def run_unified_sweep() -> None:
+
+async def run_unified_sweep(suite_name: str) -> None:
     dataset = "RAG_Gold_Benchmark_v2"
 
-    # Choose which lists to run
-    active_experiments = chunking_experiments + planner_experiments
+    if suite_name not in EXPERIMENT_SUITES:
+        print(f"❌ Error: Suite '{suite_name}' not found.")
+        print(f"Available suites: {', '.join(EXPERIMENT_SUITES.keys())}")
+        sys.exit(1)
+
+    active_experiments = EXPERIMENT_SUITES[suite_name]
 
     print(f"🚀 Initializing Unified Sweep for {len(active_experiments)} experiments...")
 
@@ -158,4 +203,16 @@ async def run_unified_sweep() -> None:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(run_unified_sweep())
+
+    parser = argparse.ArgumentParser(description="Run RAG Evaluation Sweeps")
+    parser.add_argument(
+        "suite",
+        type=str,
+        choices=list(EXPERIMENT_SUITES.keys()),
+        help="Which suite of experiments to run",
+    )
+
+    args = parser.parse_args()
+
+    # Run the selected suite
+    asyncio.run(run_unified_sweep(args.suite))

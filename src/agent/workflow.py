@@ -139,8 +139,13 @@ class RAGWorkflow:
     @staticmethod
     def should_continue_agent(state: AgentState) -> str:
         last_message = state["messages"][-1]
+
         if getattr(last_message, "tool_calls", None):
             return "tools"
+
+        if not state.get("use_critic", True):
+            return END
+
         return "critic"
 
     @staticmethod
@@ -150,7 +155,7 @@ class RAGWorkflow:
         return "agent"
 
     def compile(self) -> CompiledStateGraph[Any, Any, Any]:
-        """Сборка графа."""
+        """Compile the LangGraph."""
         workflow = StateGraph(AgentState)
         workflow.add_node("planner", self.planner_node)
         workflow.add_node("agent", self.agent_node)
@@ -164,7 +169,9 @@ class RAGWorkflow:
         workflow.add_edge("planner", "tools")
 
         workflow.add_conditional_edges(
-            "agent", self.should_continue_agent, {"tools": "tools", "critic": "critic"}
+            "agent",
+            self.should_continue_agent,
+            {"tools": "tools", "critic": "critic", END: END},
         )
         workflow.add_edge("tools", "agent")
         workflow.add_conditional_edges(

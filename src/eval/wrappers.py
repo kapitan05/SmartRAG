@@ -19,8 +19,10 @@ def get_eval_graph() -> Any:
 def make_rag_eval_wrapper(config_overrides: dict[str, Any]) -> Any:
     """
     FACTORY FUNCTION: This wraps the evaluation logic and bakes in the
-    experiment's specific configurations (e.g., retriever_k, use_planner, prompt_version).
+    experiment's specific configurations
+    (e.g., retriever_k, use_planner, prompt_version).
     """
+    should_use_critic = config_overrides.get("use_critic", True)
 
     async def rag_eval_wrapper(inputs: dict[str, Any]) -> dict[str, Any]:
         """
@@ -38,11 +40,16 @@ def make_rag_eval_wrapper(config_overrides: dict[str, Any]) -> Any:
         config: RunnableConfig = {"configurable": merged_config}
 
         # graph state with initial question
+        # Things the LLM actively reads, writes, or reasons about
+        # (Chat messages, retrieved documents, approval flags, revision counters).
         initial_state = {
             "user_id": "evaluator_bot",
             "query": question,
             "messages": [HumanMessage(content=question)],
+            "use_critic": should_use_critic,
         }
+        # config for infrastructure settings (Thread IDs for memory,
+        # top-k values for sweeps, feature flags like use_critic
 
         result_state = await graph_eval.ainvoke(initial_state, config=config)
 

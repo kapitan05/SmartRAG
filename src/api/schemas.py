@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     user_id: str
     query: str
+    use_critic: Optional[bool] = None
 
 
 class ChatResponse(BaseModel):

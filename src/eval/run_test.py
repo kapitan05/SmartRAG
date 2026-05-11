@@ -78,7 +78,8 @@ async def run_ab_experiment(
                     evaluate_document_recall,
                 ],
                 experiment_prefix=experiment_prefix,
-                # Wrap config_overrides in a 'config' dict so LangGraph's RunnableConfig can extract it
+                # Wrap config_overrides in a 'config' dict so LangGraph's
+                # RunnableConfig can extract it
                 metadata={"config": config_overrides},
                 max_concurrency=4,
             )
@@ -112,7 +113,10 @@ async def run_ab_experiment(
                     metrics_to_log[f"{clean_metric_name}_std"] = float(std_value)
 
                 logger.info(
-                    f"   -> {clean_metric_name}: {mean_value:.4f} (std: {std_value:.4f})"
+                    (
+                        f"   -> {clean_metric_name}: {mean_value:.4f} "
+                        f"(std: {std_value:.4f})"
+                    )
                 )
 
         # Bulk log all aggregated metrics to MLflow
@@ -145,7 +149,8 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser(
-        description="Run RAG evaluation experiment with specified dataset and configuration."
+        description="Run RAG evaluation experiment with specified"
+        " dataset and configuration."
     )
     parser.add_argument(
         "--prefix",

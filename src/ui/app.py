@@ -13,6 +13,14 @@ with st.sidebar:
     st.header("⚙️ Management")
     st.write(f"**Current User:** `{USER_ID}`")
 
+    st.header("⚙️ Agent Settings")
+
+    enable_critic = st.toggle(
+        "Enable Critic (Self-Correction)",
+        value=True,
+        help="If disabled, the AI will answer faster but without self-reflection.",
+    )
+
     if st.button("🗑 Reset Context", use_container_width=True):
         try:
             response = httpx.delete(f"{API_URL}/chat/context/{USER_ID}", timeout=None)
@@ -51,6 +59,12 @@ if prompt := st.chat_input("Ask me anything about SEC 10-K reports..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    payload = {
+        "user_id": USER_ID,
+        "query": prompt,
+        "use_critic": enable_critic,  # <-- Send the UI state to FastAPI
+    }
+
     # Agent's turn to respond
     with st.chat_message("assistant"):
         with st.spinner(
@@ -59,7 +73,7 @@ if prompt := st.chat_input("Ask me anything about SEC 10-K reports..."):
             try:
                 response = httpx.post(
                     f"{API_URL}/chat",
-                    json={"user_id": USER_ID, "query": prompt},
+                    json=payload,
                     timeout=None,
                 )
 

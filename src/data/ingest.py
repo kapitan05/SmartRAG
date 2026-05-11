@@ -99,7 +99,8 @@ def parse_document_with_docling(file_path: str) -> str:
         }
 
         print(
-            f"⏳ Sending {os.path.basename(file_path)} to Docling API with optimized settings..."
+            f"⏳ Sending {os.path.basename(file_path)} "
+            f"to Docling API with optimized settings..."
         )
 
         # 2. Pass 'options' to the 'data' parameter to send them as form fields
@@ -131,7 +132,8 @@ def summarize_chunk(chunk_text: str, document_context: str, llm: ChatOpenAI) -> 
     """
     Optional: Calls an LLM to generate a strict 1-sentence summary of the chunk.
     """
-    prompt = f"""You are a financial analyst. Give a 1-sentence summary of the following excerpt from a SEC filing.
+    prompt = f"""You are a financial analyst. Give a 1-sentence summary
+      of the following excerpt from a SEC filing.
     Document Context: {document_context}
     
     Excerpt:
@@ -156,7 +158,29 @@ async def run_ingestion(
     client = QdrantClient(host=qdrant_host, port=qdrant_port)
     client.set_sparse_model("Qdrant/bm25")
 
-    if not client.collection_exists(collection_name):
+    # enusres the collection exists. If it already exists with data,
+    #  we skip ingestion to avoid duplicates! If it exists but is empty,
+    # we proceed with ingestion.
+    if client.collection_exists(collection_name):
+        collection_info = client.get_collection(collection_name)
+        # If the collection has points, assume it was successfully built
+        # in a previous sweep!
+        if (
+            collection_info.points_count is not None
+            and int(collection_info.points_count) > 0
+        ):
+            logger.info(
+                f"⏭️  Collection '{collection_name}' already exists with "
+                f"{collection_info.points_count} points. Skipping ingestion!"
+            )
+            return
+        else:
+            logger.info(
+                f"Collection '{collection_name}' exists but is empty. "
+                f" Proceeding with ingestion..."
+            )
+    else:
+        logger.info(f"Creating new collection: '{collection_name}'")
         client.create_collection(
             collection_name=collection_name,
             vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
@@ -219,7 +243,10 @@ async def run_ingestion(
 
             section_path = " > ".join([h for h in [h1, h2] if h])
 
-            context_header = f"{doc_meta['ticker']} Financial Report, {doc_meta['year']} {doc_meta['quarter']}."
+            context_header = (
+                f"{doc_meta['ticker']} Financial Report, "
+                f"{doc_meta['year']} {doc_meta['quarter']}."
+            )
             if section_path:
                 context_header += f"\nSection: {section_path}"
 
@@ -229,7 +256,8 @@ async def run_ingestion(
             # (OPTIONAL) Enable this if you want the LLM summary.
             # WARNING: For a full 10-Q, this will make ~200 API calls per document.
             #  (4000 chars per chunk)
-            # document_context = f"{doc_meta['ticker']} 10-Q filing for {doc_meta['year']} {doc_meta['quarter']}."
+            # document_context = f"{doc_meta['ticker']} 10-Q filing for
+            #  {doc_meta['year']} {doc_meta['quarter']}."
             # summary = summarize_chunk(chunk.page_content, document_context, llm)
             # context_header += f"\n[SUMMARY: {summary}]"
 
@@ -246,7 +274,8 @@ async def run_ingestion(
         save_chunks_to_json(final_chunks, json_file_path)
 
         logger.info(
-            f"Generating Dense & BM25 embeddings and uploading {len(final_chunks)} chunks to Qdrant"
+            f"Generating Dense & BM25 embeddings and uploading {len(final_chunks)} "
+            f"chunks to Qdrant"
         )
         QdrantVectorStore.from_documents(
             final_chunks,

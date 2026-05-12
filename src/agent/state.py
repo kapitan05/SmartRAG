@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import BaseMessage
@@ -5,18 +6,20 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 
-class CriticFeedback(BaseModel):
-    """Structured output for the Critic Agent."""
+class CriticDecision(str, Enum):
+    APPROVED = "approved"
+    REVISE = "revise"
+    RESEARCH = "research"
 
-    approved: bool = Field(description="Approved or not.")
-    issues: list[str] = Field(
-        default_factory=list, description="List of identified issues."
-    )
+
+class CriticFeedback(BaseModel):
+    decision: CriticDecision = Field(description="The routing decision for the agent.")
+    issues: list[str] = Field(description="Specific issues found. Empty if approved.")
 
 
 class AgentState(TypedDict):
     """The State of our LangGraph."""
 
     messages: Annotated[list[BaseMessage], add_messages]
-    approved: bool
     revisions: int
+    critic_decision: CriticDecision

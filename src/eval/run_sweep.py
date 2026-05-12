@@ -77,22 +77,22 @@ prompt_experiments: List[Dict[str, Any]] = [
 # Planner vs No Planner
 planner_experiments: List[Dict[str, Any]] = [
     {
-        "prefix": "Agent_Standard_Single_Shot",
+        "prefix": "Agent_Standard_Single_Shot_K5",
         "config": {
             "prompt_version": "v4_strict_metadata",
             "use_planner": False,
-            "retriever_k": 10,
+            "retriever_k": 5,
             "search_algorithm": "hybrid",
             "collection_name": "sec_reports",
             "use_critic": False,
         },
     },
     {
-        "prefix": "Agent_With_Query_Decomposition",
+        "prefix": "Agent_With_Query_Decomposition_K5",
         "config": {
             "prompt_version": "v4_strict_metadata",
             "use_planner": True,
-            "retriever_k": 10,
+            "retriever_k": 5,
             "search_algorithm": "hybrid",
             "collection_name": "sec_reports",
             "use_critic": False,
@@ -105,10 +105,10 @@ critic_experiments: List[Dict[str, Any]] = [
         "prefix": "Agent_Critic_Disabled_Fast",
         "config": {
             "use_critic": False,
-            "prompt_version": "v4_strict_metadata",  # Use your best prompt here
-            "retriever_k": 10,  # Use your best K here
-            "search_algorithm": "hybrid",  # Use your best search here
-            "collection_name": "sec_reports",  # Use your best chunking here
+            "prompt_version": "v4_strict_metadata",
+            "retriever_k": 10,
+            "search_algorithm": "hybrid",
+            "collection_name": "sec_reports",
         },
     },
     {

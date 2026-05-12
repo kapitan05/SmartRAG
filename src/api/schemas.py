@@ -1,6 +1,13 @@
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
+
+
+class CriticDecision(str, Enum):
+    APPROVED = "approved"
+    REVISE = "revise"
+    RESEARCH = "research"
 
 
 class Token(BaseModel):

@@ -18,7 +18,12 @@ from src.prompts.system import (
     PLANNER_SYSTEM_PROMPT,
     PROMPT_VERSIONS,
 )
-from src.prompts.templates import CRITIC_EVALUATION_TEMPLATE
+from src.prompts.templates import (
+    CRITIC_EVALUATION_TEMPLATE,
+    PLANNER_RESEARCH_TEMPLATE,
+    RESEARCH_FEEDBACK_MSG,
+    REVISE_FEEDBACK_MSG,
+)
 
 
 class RAGWorkflow:
@@ -48,7 +53,7 @@ class RAGWorkflow:
         revisions = state.get("revisions", 0)
 
         if revisions >= 2:
-            return {"approved": True}
+            return {"critic_decision": "approved"}
         # user query extraction
         user_queries = [
             m.content
@@ -67,7 +72,6 @@ class RAGWorkflow:
         user_prompt = CRITIC_EVALUATION_TEMPLATE.format(
             question=original_question, context=context, draft_answer=draft_answer
         )
-
         raw_feedback = self.critic_llm.invoke(
             [
                 SystemMessage(content=CRITIC_SYSTEM_PROMPT),
@@ -76,28 +80,39 @@ class RAGWorkflow:
         )
         feedback = cast(CriticFeedback, raw_feedback)
 
-        if feedback.approved:
-            return {"approved": True, "revisions": revisions}
+        if feedback.decision == "approved":
+            return {"critic_decision": "approved"}
 
-        feedback_msg = HumanMessage(
-            content=f"CRITIC_FEEDBACK: Your previous answer was rejected.\n"
-            f"Identified Issues: {feedback.issues}\n"
-            f"Action Required: Rewrite the answer to directly address the user's "
-            f"question, strictly using ONLY the provided context. Do not hallucinate."
-        )
+        if feedback.decision == "research":
+            content = RESEARCH_FEEDBACK_MSG.format(issues=feedback.issues)
+        else:
+            content = REVISE_FEEDBACK_MSG.format(issues=feedback.issues)
 
         return {
-            "messages": [feedback_msg],
-            "approved": False,
+            "messages": [HumanMessage(content=content)],
             "revisions": revisions + 1,
+            "critic_decision": feedback.decision.value,
         }
 
     def planner_node(self, state: AgentState) -> dict[str, Any]:
         """Intercepts the question and decomposes it into parallel tool calls."""
         messages = state["messages"]
-        user_query = messages[-1].content
 
-        # Bind the structured output schema to the LLM
+        user_queries = [
+            m.content
+            for m in messages
+            if isinstance(m, HumanMessage) and "CRITIC_FEEDBACK:" not in str(m.content)
+        ]
+        original_query = str(user_queries[-1]) if user_queries else "Unknown Query"
+        last_message = str(messages[-1].content)
+
+        if "CRITIC_FEEDBACK:" in last_message:
+            query_to_plan = PLANNER_RESEARCH_TEMPLATE.format(
+                original_query=original_query, feedback=last_message
+            )
+        else:
+            query_to_plan = original_query
+
         planner_llm = self.llm.with_structured_output(SearchPlan)
 
         # get the decomposed plan
@@ -106,7 +121,7 @@ class RAGWorkflow:
             planner_llm.invoke(
                 [
                     SystemMessage(content=PLANNER_SYSTEM_PROMPT),
-                    HumanMessage(content=str(user_query)),
+                    HumanMessage(content=str(query_to_plan)),
                 ]
             ),
         )
@@ -153,10 +168,17 @@ class RAGWorkflow:
         return END
 
     @staticmethod
-    def should_continue_critic(state: AgentState) -> str:
-        if state.get("approved"):
+    def route_after_critic(state: AgentState, config: RunnableConfig) -> str:
+        """Routes the graph based on the critic's decision and current config."""
+        decision = state.get("critic_decision", "approved")
+        use_planner = config.get("configurable", {}).get("use_planner", False)
+
+        if decision == "approved":
             return END
-        return "agent"
+        elif decision == "research":
+            return "planner" if use_planner else "agent"
+        else:
+            return "agent"
 
     def compile(self) -> CompiledStateGraph[Any, Any, Any]:
         """Compile the LangGraph."""
@@ -179,7 +201,13 @@ class RAGWorkflow:
         )
         workflow.add_edge("tools", "agent")
         workflow.add_conditional_edges(
-            "critic", self.should_continue_critic, {"agent": "agent", END: END}
+            "critic",
+            self.route_after_critic,
+            {
+                "agent": "agent",
+                "planner": "planner",
+                END: END,
+            },
         )
 
         return workflow.compile()

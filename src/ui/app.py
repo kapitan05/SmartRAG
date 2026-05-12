@@ -13,10 +13,8 @@ with st.sidebar:
     st.header("⚙️ Management")
     st.write(f"**Current User:** `{USER_ID}`")
 
-    st.header("⚙️ Agent Settings")
-
     enable_critic = st.toggle(
-        "Enable Critic (Self-Correction)",
+        "Enable Critic",
         value=True,
         help="If disabled, the AI will answer faster but without self-reflection.",
     )

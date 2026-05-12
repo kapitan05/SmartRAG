@@ -5,7 +5,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables.config import RunnableConfig
 from langchain_core.tools import BaseTool
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
@@ -82,8 +82,8 @@ class RAGWorkflow:
         feedback_msg = HumanMessage(
             content=f"CRITIC_FEEDBACK: Your previous answer was rejected.\n"
             f"Identified Issues: {feedback.issues}\n"
-            f"Action Required: Rewrite the answer to directly address the user's question, "
-            f"strictly using ONLY the provided context. Do not hallucinate."
+            f"Action Required: Rewrite the answer to directly address the user's "
+            f"question, strictly using ONLY the provided context. Do not hallucinate."
         )
 
         return {
@@ -129,7 +129,9 @@ class RAGWorkflow:
 
     @staticmethod
     def route_start(state: AgentState, config: RunnableConfig) -> str:
-        """Dynamically routes to the planner or directly to the agent based on config."""
+        """Dynamically routes to the planner or directly to
+        the agent based on config.
+        """
         use_planner = config.get("configurable", {}).get("use_planner", False)
 
         if use_planner:

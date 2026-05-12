@@ -22,15 +22,15 @@ generation_experiments: List[Dict[str, Any]] = [
 retrieval_experiments: List[Dict[str, Any]] = [
     {
         "prefix": "Search_Dense_Only_K5",
-        "config": {"search_algorithm": "dense", "retriever_k": 5},
+        "config": {"search_algorithm": "dense", "retriever_k": 5, "critic": False},
     },
     {
         "prefix": "Search_BM25_Only_K5",
-        "config": {"search_algorithm": "bm25", "retriever_k": 5},
+        "config": {"search_algorithm": "bm25", "retriever_k": 5, "critic": False},
     },
     {
         "prefix": "Search_Hybrid_RRF_K5",
-        "config": {"search_algorithm": "hybrid", "retriever_k": 5},
+        "config": {"search_algorithm": "hybrid", "retriever_k": 5, "critic": False},
     },
 ]
 
@@ -43,6 +43,7 @@ prompt_experiments: List[Dict[str, Any]] = [
             "search_algorithm": "hybrid",
             "retriever_k": 5,
             "collection_name": "sec_reports",
+            "critic": False,
         },
     },
     {
@@ -52,6 +53,7 @@ prompt_experiments: List[Dict[str, Any]] = [
             "search_algorithm": "hybrid",
             "retriever_k": 5,
             "collection_name": "sec_reports",
+            "critic": False,
         },
     },
 ]

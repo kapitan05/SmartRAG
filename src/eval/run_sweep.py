@@ -12,25 +12,41 @@ logging.basicConfig(level=logging.INFO)
 
 # Top-K and Temperature (Generation constraints)
 generation_experiments: List[Dict[str, Any]] = [
-    {"prefix": "Gen_K3_Temp0", "config": {"retriever_k": 3, "temperature": 0.0}},
-    {"prefix": "Gen_K5_Temp0", "config": {"retriever_k": 5, "temperature": 0.0}},
-    {"prefix": "Gen_K10_Temp0", "config": {"retriever_k": 10, "temperature": 0.0}},
-    {"prefix": "Gen_K5_Temp0.5", "config": {"retriever_k": 5, "temperature": 0.5}},
+    {
+        "prefix": "Gen_K3_Temp0",
+        "config": {"retriever_k": 3, "temperature": 0.0, "use_critic": False},
+    },
+    {
+        "prefix": "Gen_K5_Temp0",
+        "config": {"retriever_k": 5, "temperature": 0.0, "use_critic": False},
+    },
+    {
+        "prefix": "Gen_K10_Temp0",
+        "config": {"retriever_k": 10, "temperature": 0.0, "use_critic": False},
+    },
+    {
+        "prefix": "Gen_K5_Temp0.3",
+        "config": {"retriever_k": 5, "temperature": 0.3, "use_critic": False},
+    },
 ]
 
 # Search Algorithms (Retrieval performance)
 retrieval_experiments: List[Dict[str, Any]] = [
     {
-        "prefix": "Search_Dense_Only_K5",
-        "config": {"search_algorithm": "dense", "retriever_k": 5, "critic": False},
+        "prefix": "Search_Dense_Only_K10",
+        "config": {"search_algorithm": "dense", "retriever_k": 10, "use_critic": False},
     },
     {
-        "prefix": "Search_BM25_Only_K5",
-        "config": {"search_algorithm": "bm25", "retriever_k": 5, "critic": False},
+        "prefix": "Search_BM25_Only_K10",
+        "config": {"search_algorithm": "bm25", "retriever_k": 10, "use_critic": False},
     },
     {
-        "prefix": "Search_Hybrid_RRF_K5",
-        "config": {"search_algorithm": "hybrid", "retriever_k": 5, "critic": False},
+        "prefix": "Search_Hybrid_RRF_K10",
+        "config": {
+            "search_algorithm": "hybrid",
+            "retriever_k": 10,
+            "use_critic": False,
+        },
     },
 ]
 
@@ -41,9 +57,9 @@ prompt_experiments: List[Dict[str, Any]] = [
         "config": {
             "prompt_version": "v3_baseline",
             "search_algorithm": "hybrid",
-            "retriever_k": 5,
+            "retriever_k": 10,
             "collection_name": "sec_reports",
-            "critic": False,
+            "use_critic": False,
         },
     },
     {
@@ -51,9 +67,9 @@ prompt_experiments: List[Dict[str, Any]] = [
         "config": {
             "prompt_version": "v4_avoid_duplicate_searches",
             "search_algorithm": "hybrid",
-            "retriever_k": 5,
+            "retriever_k": 10,
             "collection_name": "sec_reports",
-            "critic": False,
+            "use_critic": False,
         },
     },
 ]
@@ -65,9 +81,10 @@ planner_experiments: List[Dict[str, Any]] = [
         "config": {
             "prompt_version": "v4_strict_metadata",
             "use_planner": False,
-            "retriever_k": 5,
+            "retriever_k": 10,
             "search_algorithm": "hybrid",
             "collection_name": "sec_reports",
+            "use_critic": False,
         },
     },
     {
@@ -75,9 +92,10 @@ planner_experiments: List[Dict[str, Any]] = [
         "config": {
             "prompt_version": "v4_strict_metadata",
             "use_planner": True,
-            "retriever_k": 5,
+            "retriever_k": 10,
             "search_algorithm": "hybrid",
             "collection_name": "sec_reports",
+            "use_critic": False,
         },
     },
 ]
@@ -88,7 +106,7 @@ critic_experiments: List[Dict[str, Any]] = [
         "config": {
             "use_critic": False,
             "prompt_version": "v4_strict_metadata",  # Use your best prompt here
-            "retriever_k": 5,  # Use your best K here
+            "retriever_k": 10,  # Use your best K here
             "search_algorithm": "hybrid",  # Use your best search here
             "collection_name": "sec_reports",  # Use your best chunking here
         },
@@ -98,7 +116,7 @@ critic_experiments: List[Dict[str, Any]] = [
         "config": {
             "use_critic": True,
             "prompt_version": "v4_strict_metadata",
-            "retriever_k": 5,
+            "retriever_k": 10,
             "search_algorithm": "hybrid",
             "collection_name": "sec_reports",
         },

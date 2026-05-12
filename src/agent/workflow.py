@@ -139,16 +139,18 @@ class RAGWorkflow:
         return "agent"
 
     @staticmethod
-    def should_continue_agent(state: AgentState) -> str:
+    def should_continue_agent(state: AgentState, config: RunnableConfig) -> str:
         last_message = state["messages"][-1]
 
         if getattr(last_message, "tool_calls", None):
             return "tools"
 
-        if not state.get("use_critic", True):
-            return END
+        use_critic = config.get("configurable", {}).get("use_critic", True)
 
-        return "critic"
+        if use_critic:
+            return "critic"
+
+        return END
 
     @staticmethod
     def should_continue_critic(state: AgentState) -> str:

@@ -20,4 +20,3 @@ class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     approved: bool
     revisions: int
-    use_critic: bool

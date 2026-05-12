@@ -3,10 +3,15 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
 class ChatRequest(BaseModel):
-    user_id: str
     query: str
     use_critic: Optional[bool] = None
+    use_planner: bool | None = None
 
 
 class ChatResponse(BaseModel):

@@ -22,7 +22,6 @@ def make_rag_eval_wrapper(config_overrides: dict[str, Any]) -> Any:
     experiment's specific configurations
     (e.g., retriever_k, use_planner, prompt_version).
     """
-    should_use_critic = config_overrides.get("use_critic", True)
 
     async def rag_eval_wrapper(inputs: dict[str, Any]) -> dict[str, Any]:
         """
@@ -46,7 +45,8 @@ def make_rag_eval_wrapper(config_overrides: dict[str, Any]) -> Any:
             "user_id": "evaluator_bot",
             "query": question,
             "messages": [HumanMessage(content=question)],
-            "use_critic": should_use_critic,
+            "approved": False,
+            "revisions": 0,
         }
         # config for infrastructure settings (Thread IDs for memory,
         # top-k values for sweeps, feature flags like use_critic

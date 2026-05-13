@@ -3,6 +3,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/badge/uv-Fast_Pip-purple.svg)](https://github.com/astral-sh/uv)
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?logo=docker&logoColor=white)](https://www.docker.com/)
+[![GCP](https://img.shields.io/badge/Google_Cloud-4285F4?style=flat&logo=google-cloud&logoColor=white)](https://cloud.google.com/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-red.svg)](https://qdrant.tech/)
 [![Docling](https://img.shields.io/badge/Docling-PDF_Parsing-orange.svg)](https://github.com/DS4SD/docling)
@@ -16,7 +17,7 @@
 [![Prometheus](https://img.shields.io/badge/Prometheus-Telemetry-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/)
 [![Grafana](https://img.shields.io/badge/Grafana-Dashboards-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
 ## Overview
-**FARS** is a production-ready, agentic Retrieval-Augmented Generation (RAG) system engineered to autonomously analyze and extract insights from financial reports of 10-Q form.
+**FARS** is a production-ready, agentic Retrieval-Augmented Generation (RAG) system engineered to autonomously analyze and extract insights from financial reports of 10-Q form. FARS is fully hosted on Google Cloud Platform and exposed on external IP.
 
 ## System in Action
 ![SEC Agent UI](docs/assets/ui_screenshot.png)
@@ -27,7 +28,7 @@
 * **Self-Correcting Critic:** Critic agent node evaluates draft answers. If data is missing, it routes the agent to fetch more data before showing the user.
 * **Quantifiable Reliability:** LLM-as-a-judge metrics guarantee high faithfulness and low hallucinations.
 
-## 🏗️ System Architecture
+## System Architecture
 ```mermaid
 graph TD
     %% User Flow
@@ -36,7 +37,7 @@ graph TD
 
     %% LangGraph Flow
     subgraph LangGraph Agentic Workflow
-        FA --> Planner[⚙️ Planner Node]
+        FA --> Planner[Planner Node]
         Planner -->|Decomposes Query| Tools[Retrieval Tools]
         Tools --> Agent[Agent Node]
         
@@ -61,61 +62,56 @@ graph TD
     end
 ```
 
-## 🏗️ System Architecture
 
-### 1. Ingestion & Indexing Pipeline
-* **Document Parsing:** Utilizes the Docling API to parse complex financial PDFs into structured Markdown.
-* **Contextual Enrichment:** Condenses tables and dynamically injects hierarchical metadata (Ticker, Year, Quarter, Section Path) into every chunk to eliminate context fragmentation.
-* **Hybrid Vector Store:** Upserts both Dense embeddings (`text-embedding-3-small`) and Sparse vectors (`Qdrant/bm25` via FastEmbed) into a local Qdrant container.
+## Evaluation
 
-### 2. Agentic Workflow
-* **Orchestration:** Powered by `LangGraph` for stateful, cyclic agent execution. Implemented with 2 agent nodes: Main and Critic the latter for verification of an answer given by Main agent.
-* **Dynamic Tooling:** Custom tools autonomously adjust retrieval parameters (e.g., switching search algorithms, number of retrieved documents) based on real-time configuration contexts.
+### Prompts testing
 
-### 3. MLOps & Evaluation Pipeline
-* **Experiment Tracking:** `MLflow` logs hyperparameter sweeps (A/B testing search algorithms, `chunk_size`, `top_k`, different document parsers).
-* **Telemetry:** `LangSmith` traces multi-stage agent trajectories and tool invocations.
+Using MLflow comparing a standard prompt (`v4_strict_metadata`) against improved one (`agent`) we achieve better results.
 
----
+| Evaluation Metric | `v4_strict_metadata` | `agent`|
+| :--- | :--- | :--- |
+| **Answer Relevancy** | 0.941 | **0.985** |
+| **Contextual Recall** | 0.739 | **0.833** |
+| **Doc Precision** | 0.617 | **0.783** |
+| **Doc Recall** | 0.950 | 0.950 |
+| **Faithfulness** | **0.857** | 0.804 |
+| **Word F1** | 0.357 | **0.379** |
 
-## 📊 Production & Business Metrics
-Evaluating autonomous agents requires moving beyond basic chunk-level matching. This system implements a robust suite of custom and LLM-assisted metrics to measure true business utility.
+<details>
+<summary>View Raw MLflow Experiment Logs</summary>
+<br>
 
-### 1. Retrieval Metrics (Custom Document-Level Eval)
-*Standard `Precision@K` fails for agents that make multiple tool calls. These custom metrics evaluate the holistic retrieval session.*
-* **Document Recall:** Measures the percentage of expected golden documents successfully retrieved by the agent across all tool calls. 
-* **Document Precision:** Measures the percentage of unique retrieved documents that were actually relevant to the query.
+<img src="docs/assets/mlflow_prompt1.png" width="800" alt="MLflow Prompt Comparison">
+<img src="docs/assets/mlflow_prompt2.png" width="800" alt="MLflow Prompt Comparison">
+</details>
 
-### 2. Generation Metrics (LLM-as-a-Judge via DeepEval)
-* **Faithfulness:** Measures hallucination rates. Ensures every claim made by the LLM is directly backed by the retrieved SEC context.
-* **Answer Relevancy:** Ensures the final output directly answers the user's prompt without unnecessary verbosity.
-* **Contextual Recall:** Evaluates if the retrieved context was sufficient for the LLM to formulate a complete answer.
 
-### 🏆 Benchmark Results (Example)
-Transitioning from Dense-only search to **Hybrid Search (RRF)** yielded significant improvements on the internal Gold Benchmark dataset:
+Running 20+ experiment runs to find the best configuration. The following was fond:
 
-| Search Strategy | Document Recall | Document Precision | Faithfulness | Answer Relevancy |
-|-----------------|-----------------|--------------------|--------------|------------------|
-| Dense Only      | 0.65            | 0.40               | 0.88         | 0.82             |
-| BM25 Only       | 0.58            | 0.45               | 0.85         | 0.78             |
-| **Hybrid (RRF)**| **0.94** | **0.88** | **0.99** | **0.96** |
+| Component | Experiments Run | Winning Configuration |
+| :--- | :--- | :--- |
+| **Search Strategy** | Dense vs. BM25 vs. Hybrid | **Hybrid** |
+| **Retrieval Depth** | k=3, 5, 10 | **k=10** |
+| **Generation** | Temp 0.0, 0.1, 0.3 | **Temp 0.0** |
+| **Query Logic** | Standard vs. Planner | **Planner** |
+| **Verification** | Critic On vs. Off | **Critic off** |
+| **Data Chunking** | 2k, 4k, 8k | **8000, 800 overlap** |
 
 ---
 
-## 🛠️ Tech Stack
-* **AI/LLM Framework:** LangChain, LangGraph, OpenAI (`gpt-4o-mini`, `text-embedding-3-small`)
-* **Vector Database:** Qdrant, FastEmbed (Local BM25)
-* **MLOps & Eval:** MLflow, DeepEval, LangSmith
-* **Infrastructure:** Docker, Docker Compose, `uv` (Python package manager)
+
+
+## Tech Stack
+* **LLM Framework:** `LangChain`, `LangGraph`, `OpenAI`
+* **Vector Database:** `Qdrant`, `FastEmbed`
+* **MLOps & Eval:** `MLflow`, `DeepEval`, `LangSmith`, `Prometheus`, `Grafana`
+* **Infrastructure:** `Docker`, `Google Cloud Platform`, `FastAPI`, `uv`
+* **UI:** `Streamlit`
 
 ---
 
-## 🚀 Quick Start
-
-### Prerequisites
-* Docker & Docker Compose
-* Python 3.10+
-* OpenAI & LangChain API Keys
+## Quick Start
 
 ### Installation & Execution
 
@@ -128,10 +124,14 @@ Transitioning from Dense-only search to **Hybrid Search (RRF)** yielded signific
    echo "OPENAI_API_KEY=sk-your-key" >> .env
    echo "LANGCHAIN_API_KEY=ls-your-key" >> .env
    echo "LANGCHAIN_TRACING_V2=true" >> .env
-   echo "LANGCHAIN_PROJECT=SEC_RAG_Eval" >> .env
-   echo "QDRANT_HOST=localhost" >> .env
+   echo "LANGCHAIN_PROJECT=your_name" >> .env
+   echo "LANGSMITH_ENDPOINT=your_endpoint" >> .env
+   echo"ACCESS_TOKEN_EXPIRE_MINUTES=1440" >> .env
+   echo "JWT_SECRET_KEY=your_key" >> .env
+   echo "JWT_ALGORITHM=HS256" >> .env
+   echo "QDRANT_HOST=qdrant" >> .env
    echo "QDRANT_PORT=6333" >> .env
-
+   echo "MONGO_URI=mongodb://mongodb:27017" >> .env
 
  **Start Infrastructure:**
 
@@ -147,24 +147,9 @@ Run MLOps Evaluation Sweeps:
 docker compose exec api uv run python -m src.eval.run_sweep
    ```
 
-### 🧠 The Critic's Paradox: Evaluator Variance vs. Agent Accuracy
-During evaluation, an interesting paradox emerged: enabling the self-correcting Critic Agent resulted in vastly superior, mathematically accurate final answers, but occasionally caused `Contextual Recall` scores to drop precipitously (e.g., 0.83 → 0.00). 
-
-**Root Cause Analysis:**
-This was identified as an artifact of **LLM-as-a-Judge variance**, not an Agent failure.
-1. **Decoupled Evaluation:** `Contextual Recall` evaluates the *Retrieval Engine* against the *Golden Answer*, completely ignoring the Agent's generated text. 
-2. **Context Overload:** When the Critic triggers a secondary search, the context window grows. Supplying highly dense, tabular SEC data to a smaller evaluator model (`gpt-4o-mini`) triggered "Lost in the Middle" degradation. The judge failed to locate facts within the expanded context.
-3. **Derived Math Penalties:** The Critic forces the Agent to calculate actual differences (e.g., "$1.571 billion decrease"). Strict evaluator models penalize this as "unsupported by context" because the derived integer does not explicitly exist in the retrieved text.
-
-**The Solution:**
-To stabilize enterprise-grade evaluation, we:
-* Transitioned the DeepEval judge to `gpt-4o` for complex tabular cross-referencing.
-* Implemented strict context deduplication prior to passing documents to the evaluation framework.
-* Utilized `GEval` to instruct the judge to permit derived mathematics.
 
 ## 🔮 Future Roadmap
 * **Two-Stage Retrieval (Cross-Encoder):** Fine-tune a lightweight open-source model (e.g., Llama-3-8B or BGE-M3) using LoRA/PEFT to rerank the broad candidate pool retrieved by Qdrant.
 * **Data Interpreter Tool:** Integrate a Python REPL tool allowing the agent to perform complex tabular data analysis (e.g., YoY growth calculations) natively via Pandas.
 * **Self-Hosted Inference (vLLM):** Transition away from proprietary API calls by hosting a quantized small language model locally or on a rented GPU instance using vLLM for high-throughput, cost-effective inference.
 * **RL Post-Training for Financial Reasoning:** Align and fine-tune the self-hosted model specifically for financial data extraction and logical reasoning using state-of-the-art Reinforcement Learning techniques such as DPO (Direct Preference Optimization) or GRPO (Group Relative Policy Optimization).
-* **Cloud-Native Deployment:** Migrate infrastructure to AWS ECS / RunPod Serverless for scalable API hosting.

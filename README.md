@@ -26,6 +26,8 @@
 * **Hybrid Search:** Semantic + BM25
 * **Self-Correcting Critic:** Critic agent node evaluates draft answers. If data is missing, it routes the agent to fetch more data before showing the user.
 * **Quantifiable Reliability:** LLM-as-a-judge metrics guarantee high faithfulness and low hallucinations.
+
+## 🏗️ System Architecture
 ```mermaid
 graph TD
     %% User Flow
@@ -35,19 +37,19 @@ graph TD
     %% LangGraph Flow
     subgraph LangGraph Agentic Workflow
         FA --> Planner[⚙️ Planner Node]
-        Planner -->|Decomposes Query| Tools[🛠️ Retrieval Tools]
-        Tools --> Agent[✍️ Generator Node]
+        Planner -->|Decomposes Query| Tools[Retrieval Tools]
+        Tools --> Agent[Agent Node]
         
-        Agent --> Critic[🧐 Tri-State Critic]
+        Agent --> Critic[Critic Node<br>Self-Reflection]
         
-        Critic -->|1. Approved| Output((Final Response))
-        Critic -->|2. Missing Data| Planner
-        Critic -->|3. Formatting Error| Agent
+        Critic -->|Approved| Output((Final Response))
+        Critic -->|Missing Data| Planner
+        Critic -->|Logic/Format Error| Agent
     end
 
     %% Data Layer
     subgraph Data & Infra
-        Tools <-->|Hybrid Search| Qdrant[(Qdrant DB<br>Dense + BM25)]
+        Tools <-->|Hybrid Search +<br>Metadata Pre-Filtering| Qdrant[(Qdrant DB<br>Dense + BM25)]
         Tools <-->|Parse PDFs| Docling[Docling Engine]
     end
 

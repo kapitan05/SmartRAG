@@ -1,4 +1,4 @@
-# 📊 Financial Agentic RAG system (FARS)
+# Financial Agentic RAG system (FARS)
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/badge/uv-Fast_Pip-purple.svg)](https://github.com/astral-sh/uv)
@@ -15,21 +15,48 @@
 [![MLflow](https://img.shields.io/badge/MLflow-Experiment_Tracking-0194E2.svg)](https://mlflow.org/)
 [![Prometheus](https://img.shields.io/badge/Prometheus-Telemetry-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/)
 [![Grafana](https://img.shields.io/badge/Grafana-Dashboards-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
-## 📝 Overview
+## Overview
 **FARS** is a production-ready, agentic Retrieval-Augmented Generation (RAG) system engineered to autonomously analyze and extract insights from financial reports of 10-Q form.
 
-## 📸 System in Action
+## System in Action
 ![SEC Agent UI](docs/assets/ui_screenshot.png)
 
-(Drop your Chatbot UI screenshot here showing a complex financial question being answered)
+## Key Capabilities
+* **Multi-Hop Reasoning:** Planner agent node can execute multiple searches to compare different companies or fiscal years in a single pass
+* **Hybrid Search:** Semantic + BM25
+* **Self-Correcting Critic:** Critic agent node evaluates draft answers. If data is missing, it routes the agent to fetch more data before showing the user.
+* **Quantifiable Reliability:** LLM-as-a-judge metrics guarantee high faithfulness and low hallucinations.
 
-Built with strict MLOps best practices, implementing **Hybrid Search (Dense + Sparse BM25)**, **Multi-hop reasoning** via LangGraph, and a comprehensive **Evaluation Pipeline** via MLFlow for experiments comparison, LangSmith for tracking every Agent call, DeepEval for LLM-as-judge + custom metrics. It guarantees highly accurate, hallucination-free financial data extraction.
+graph TD
+    %% User Flow
+    User((User)) -->|Query| UI[Streamlit UI]
+    UI -->|API Call| FA[FastAPI Backend]
 
-## 💼 Business Value
-Extracting actionable insights from 150+ page SEC filings (e.g., MSFT, NVDA) is highly manual and error-prone. This system automates the workflow while maintaining enterprise standards of accuracy:
-* **High-Fidelity Retrieval:** Standard semantic search fails at exact-keyword matching (e.g., "Form S-1", specific tickers). Implementing Reciprocal Rank Fusion (RRF) ensures high recall for both conceptual queries and exact financial figures.
-* **Autonomous Multi-Hop Reasoning:** The LangGraph agent dynamically executes multiple tool calls per query, allowing it to natively cross-reference and compare multiple companies in a single pass.
-* **Quantifiable Reliability:** Robust evaluation with both retrieval and generation metrics proves system reliability before deployment.
+    %% LangGraph Flow
+    subgraph LangGraph Agentic Workflow
+        FA --> Planner[⚙️ Planner Node]
+        Planner -->|Decomposes Query| Tools[🛠️ Retrieval Tools]
+        Tools --> Agent[✍️ Generator Node]
+        
+        Agent --> Critic[🧐 Tri-State Critic]
+        
+        Critic -->|1. Approved| Output((Final Response))
+        Critic -->|2. Missing Data| Planner
+        Critic -->|3. Formatting Error| Agent
+    end
+
+    %% Data Layer
+    subgraph Data & Infra
+        Tools <-->|Hybrid Search| Qdrant[(Qdrant DB<br>Dense + BM25)]
+        Tools <-->|Parse PDFs| Docling[Docling Engine]
+    end
+
+    %% Telemetry Layer
+    subgraph Observability
+        Agent -.->|Traces| LS(LangSmith)
+        Critic -.->|Traces| LS
+        FA -.->|Metrics| Prom(Prometheus) --> Graf(Grafana)
+    end
 
 ---
 

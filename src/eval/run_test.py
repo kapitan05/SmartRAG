@@ -173,6 +173,13 @@ if __name__ == "__main__":
         run_ab_experiment(
             dataset_name=args.dataset,
             experiment_prefix=args.prefix,
-            config_overrides={"temperature": 0.2, "retriever_k": 5},
+            config_overrides={
+                "temperature": 0.0,
+                "retriever_k": 10,
+                "search_algorithm": "hybrid",
+                "use_critic": True,
+                "use_planner": False,
+                "prompt_version": "agent",
+            },
         )
     )

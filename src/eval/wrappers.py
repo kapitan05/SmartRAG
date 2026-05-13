@@ -35,18 +35,20 @@ def make_rag_eval_wrapper(config_overrides: dict[str, Any]) -> Any:
         question: str = inputs["question"]
         # unique thread_id for LangSmith
         thread_id = str(uuid.uuid4())
-        merged_config = {**config_overrides, "thread_id": thread_id}
+        merged_config = {
+            **config_overrides,
+            "thread_id": thread_id,
+            "user_id": "evaluator_bot",
+        }
         config: RunnableConfig = {"configurable": merged_config}
 
         # graph state with initial question
         # Things the LLM actively reads, writes, or reasons about
         # (Chat messages, retrieved documents, approval flags, revision counters).
         initial_state = {
-            "user_id": "evaluator_bot",
-            "query": question,
             "messages": [HumanMessage(content=question)],
             "approved": False,
-            "revisions": 0,
+            "critic_decision": "approved",
         }
         # config for infrastructure settings (Thread IDs for memory,
         # top-k values for sweeps, feature flags like use_critic

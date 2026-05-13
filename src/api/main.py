@@ -103,7 +103,7 @@ async def chat_endpoint(
         initial_state = {
             "messages": messages,
             "approved": False,
-            "revisions": 0,
+            "critic_decision": "approved",
         }
 
         final_state = await graph.ainvoke(initial_state, config=graph_config)

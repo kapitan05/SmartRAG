@@ -86,6 +86,7 @@ Using MLflow comparing a standard prompt (`v4_strict_metadata`) against improved
 <img src="docs/assets/mlflow_prompt2.png" width="800" alt="MLflow Prompt Comparison">
 </details>
 
+### Experiments
 
 Running 20+ experiment runs to find the best configuration. The following was fond:
 
@@ -99,7 +100,15 @@ Running 20+ experiment runs to find the best configuration. The following was fo
 | **Data Chunking** | 2k, 4k, 8k | **8000, 800 overlap** |
 
 ---
+### Tracing
+For better understaing of system behaviour the traces where thorougly analyzed, using LangSmith. For example below you can view Critic on and Critic off traces.
+<details>
+<summary>View LangSmith traces</summary>
+<br>
 
+<img src="docs/assets/langsmith_critic_on.png" width="800" alt="MLflow Prompt Comparison">
+<img src="docs/assets/langsmith_critic_off.png" width="800" alt="MLflow Prompt Comparison">
+</details>
 
 
 ## Tech Stack
@@ -126,7 +135,7 @@ Running 20+ experiment runs to find the best configuration. The following was fo
    echo "LANGCHAIN_TRACING_V2=true" >> .env
    echo "LANGCHAIN_PROJECT=your_name" >> .env
    echo "LANGSMITH_ENDPOINT=your_endpoint" >> .env
-   echo"ACCESS_TOKEN_EXPIRE_MINUTES=1440" >> .env
+   echo "ACCESS_TOKEN_EXPIRE_MINUTES=1440" >> .env
    echo "JWT_SECRET_KEY=your_key" >> .env
    echo "JWT_ALGORITHM=HS256" >> .env
    echo "QDRANT_HOST=qdrant" >> .env

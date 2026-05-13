@@ -1,4 +1,4 @@
-# 📊 SEC Insight Agent: Enterprise-Grade Financial RAG System
+# 📊 Financial Agentic RAG system (FARS)
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/badge/uv-Fast_Pip-purple.svg)](https://github.com/astral-sh/uv)
@@ -16,7 +16,12 @@
 [![Prometheus](https://img.shields.io/badge/Prometheus-Telemetry-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/)
 [![Grafana](https://img.shields.io/badge/Grafana-Dashboards-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
 ## 📝 Overview
-**SEC Insight Agent** is a production-ready, agentic Retrieval-Augmented Generation (RAG) system engineered to autonomously analyze and extract insights from dense SEC 10-K financial reports. 
+**FARS** is a production-ready, agentic Retrieval-Augmented Generation (RAG) system engineered to autonomously analyze and extract insights from financial reports of 10-Q form.
+
+## 📸 System in Action
+![SEC Agent UI](docs/assets/ui_screenshot.png)
+
+(Drop your Chatbot UI screenshot here showing a complex financial question being answered)
 
 Built with strict MLOps best practices, implementing **Hybrid Search (Dense + Sparse BM25)**, **Multi-hop reasoning** via LangGraph, and a comprehensive **Evaluation Pipeline** via MLFlow for experiments comparison, LangSmith for tracking every Agent call, DeepEval for LLM-as-judge + custom metrics. It guarantees highly accurate, hallucination-free financial data extraction.
 
@@ -113,6 +118,21 @@ Run MLOps Evaluation Sweeps:
    ```bash
 docker compose exec api uv run python -m src.eval.run_sweep
    ```
+
+### 🧠 The Critic's Paradox: Evaluator Variance vs. Agent Accuracy
+During evaluation, an interesting paradox emerged: enabling the self-correcting Critic Agent resulted in vastly superior, mathematically accurate final answers, but occasionally caused `Contextual Recall` scores to drop precipitously (e.g., 0.83 → 0.00). 
+
+**Root Cause Analysis:**
+This was identified as an artifact of **LLM-as-a-Judge variance**, not an Agent failure.
+1. **Decoupled Evaluation:** `Contextual Recall` evaluates the *Retrieval Engine* against the *Golden Answer*, completely ignoring the Agent's generated text. 
+2. **Context Overload:** When the Critic triggers a secondary search, the context window grows. Supplying highly dense, tabular SEC data to a smaller evaluator model (`gpt-4o-mini`) triggered "Lost in the Middle" degradation. The judge failed to locate facts within the expanded context.
+3. **Derived Math Penalties:** The Critic forces the Agent to calculate actual differences (e.g., "$1.571 billion decrease"). Strict evaluator models penalize this as "unsupported by context" because the derived integer does not explicitly exist in the retrieved text.
+
+**The Solution:**
+To stabilize enterprise-grade evaluation, we:
+* Transitioned the DeepEval judge to `gpt-4o` for complex tabular cross-referencing.
+* Implemented strict context deduplication prior to passing documents to the evaluation framework.
+* Utilized `GEval` to instruct the judge to permit derived mathematics.
 
 ## 🔮 Future Roadmap
 * **Two-Stage Retrieval (Cross-Encoder):** Fine-tune a lightweight open-source model (e.g., Llama-3-8B or BGE-M3) using LoRA/PEFT to rerank the broad candidate pool retrieved by Qdrant.

@@ -105,7 +105,8 @@ critic_experiments: List[Dict[str, Any]] = [
         "prefix": "Agent_Critic_Disabled_Fast",
         "config": {
             "use_critic": False,
-            "prompt_version": "v4_strict_metadata",
+            "use_planner": False,
+            "prompt_version": "agent",
             "retriever_k": 10,
             "search_algorithm": "hybrid",
             "collection_name": "sec_reports",
@@ -115,7 +116,8 @@ critic_experiments: List[Dict[str, Any]] = [
         "prefix": "Agent_Critic_Enabled_Accurate",
         "config": {
             "use_critic": True,
-            "prompt_version": "v4_strict_metadata",
+            "use_planner": False,
+            "prompt_version": "agent",
             "retriever_k": 10,
             "search_algorithm": "hybrid",
             "collection_name": "sec_reports",

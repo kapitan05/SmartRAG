@@ -26,7 +26,7 @@
 * **Hybrid Search:** Semantic + BM25
 * **Self-Correcting Critic:** Critic agent node evaluates draft answers. If data is missing, it routes the agent to fetch more data before showing the user.
 * **Quantifiable Reliability:** LLM-as-a-judge metrics guarantee high faithfulness and low hallucinations.
-
+```mermaid
 graph TD
     %% User Flow
     User((User)) -->|Query| UI[Streamlit UI]
@@ -57,8 +57,7 @@ graph TD
         Critic -.->|Traces| LS
         FA -.->|Metrics| Prom(Prometheus) --> Graf(Grafana)
     end
-
----
+```
 
 ## 🏗️ System Architecture
 

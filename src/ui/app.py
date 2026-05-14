@@ -231,7 +231,8 @@ if st.session_state.is_generating and st.session_state.pending_prompt:
                 answer = data.get("answer", "No answer available")
                 revisions = data.get("revisions_needed", 0)
 
-                st.markdown(answer)
+                safe_answer = answer.replace("$", r"\$")
+                st.markdown(safe_answer)
                 if revisions > 0:
                     st.caption(f"🔄 Revised {revisions} time(s) by critic.")
 

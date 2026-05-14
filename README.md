@@ -1,4 +1,4 @@
-# Financial Agentic RAG system (FARS)
+# Financial Agentic RAG Chat (FARC)
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/badge/uv-Fast_Pip-purple.svg)](https://github.com/astral-sh/uv)
@@ -17,7 +17,7 @@
 [![Prometheus](https://img.shields.io/badge/Prometheus-Telemetry-E6522C?logo=prometheus&logoColor=white)](https://prometheus.io/)
 [![Grafana](https://img.shields.io/badge/Grafana-Dashboards-F46800?logo=grafana&logoColor=white)](https://grafana.com/)
 ## Overview
-**FARS** is a production-ready, agentic Retrieval-Augmented Generation (RAG) system engineered to autonomously analyze and extract insights from financial reports of 10-Q form. FARS is fully hosted on Google Cloud Platform and exposed on external IP.
+**FARC** is a production-ready, agentic Retrieval-Augmented Generation (RAG) system engineered to autonomously analyze and extract insights from financial reports of 10-Q form. FARC is fully hosted on Google Cloud Platform and exposed on external IP.
 
 ## System in Action
 ![SEC Agent UI](docs/assets/ui_screenshot.png)
@@ -27,7 +27,7 @@
 * **Hybrid Search:** Semantic + BM25
 * **Self-Correcting Critic:** Critic agent node evaluates draft answers. If data is missing, it routes the agent to fetch more data before showing the user.
 * **Quantifiable Reliability:** LLM-as-a-judge metrics guarantee high faithfulness and low hallucinations.
-
+* **Chat Bot:** The diaolog is preserved in MongoDB for each user. The context is used for following user questions.
 ## System Architecture
 ```mermaid
 graph TD

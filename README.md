@@ -110,6 +110,11 @@ For better understaing of system behaviour the traces where thorougly analyzed, 
 <img src="docs/assets/langsmith_critic_off.png" width="800" alt="MLflow Prompt Comparison">
 </details>
 
+## MLops
+Observability is powered by Prometheus and Grafana, providing information on p95 latency, 'burn rates', average consumption per query total API calls.
+![Grafana](docs/assets/grafana.png)
+
+---
 
 ## Tech Stack
 * **LLM Framework:** `LangChain`, `LangGraph`, `OpenAI`
@@ -157,8 +162,8 @@ docker compose exec api uv run python -m src.eval.run_sweep
    ```
 
 
-## 🔮 Future Roadmap
-* **Two-Stage Retrieval (Cross-Encoder):** Fine-tune a lightweight open-source model (e.g., Llama-3-8B or BGE-M3) using LoRA/PEFT to rerank the broad candidate pool retrieved by Qdrant.
-* **Data Interpreter Tool:** Integrate a Python REPL tool allowing the agent to perform complex tabular data analysis (e.g., YoY growth calculations) natively via Pandas.
-* **Self-Hosted Inference (vLLM):** Transition away from proprietary API calls by hosting a quantized small language model locally or on a rented GPU instance using vLLM for high-throughput, cost-effective inference.
-* **RL Post-Training for Financial Reasoning:** Align and fine-tune the self-hosted model specifically for financial data extraction and logical reasoning using state-of-the-art Reinforcement Learning techniques such as DPO (Direct Preference Optimization) or GRPO (Group Relative Policy Optimization).
+## Future Improvements
+* **Reranker:** Fine-tune a smal model using LoRA to rerank the retrieved chuncks by relevance.
+* **Table analysis:** Integrate a Python tool allowing the agent to perform tabular data analysis.
+* **Self-Hosted Inference (vLLM):** Transition away from OpenAI API calls to local small LM.
+* **RL Post-Training:** Fine-tune this model specifically for financial data extraction and reasoning using RL techniques.
